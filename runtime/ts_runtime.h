@@ -302,9 +302,9 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
 
 static inline ts_member_t ts_vtable_member(ts_vtable_t* vtable, uint32_t member_index) {
   ts_debug_check(vtable != NULL, "vtable is NULL");
-  ts_debug_check(vtable->member_count < member_index,
+  ts_debug_check((vtable->member_count + ts_method_last) > member_index,
 	 "member index(%d) out of the vtable(member count: %d) in \"%s\"", \
-	 member_index, vtable->member_count, vtable->object_name);
+	 member_index, vtable->member_count + ts_method_last, vtable->object_name);
   return *TS_OFFSET(ts_member_t, &vtable->constructor, sizeof(ts_member_t)*member_index);
 }
 
