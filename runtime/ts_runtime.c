@@ -11,8 +11,20 @@
 #include "ts_debug.h"
 
 static ts_object_t* _new_object(ts_gc_t* gc, ts_vtable_env_t* env_vt, ts_argument_t args) {
-  ts_object_t* obj = (ts_object_t*)(ts_gc_alloc(gc, env_vt->vtable->object_size));
+  ts_vtable_t* vt = env_vt->vtable;
+  void *ptr = ts_gc_alloc(gc, env_vt->vtable->object_size);
+  ts_object_t* obj = TS_OFFSET(ts_object_t, ptr, sizeof(ts_interface_t) * (vt->interfaces_count));
   obj->vtable_env = env_vt;
+
+  // init the interfaces
+  if (vt->interfaces_count > 0) {
+    ts_interface_t* intf = (ts_interface_t*)obj;
+    ts_interface_entry_t* entries = (ts_interface_entry_t*)vt;
+    for (int32_t i = 0; i < (int)(vt->interfaces_count); i++) {
+      intf[-i-1].interface_entry = &entries[-i-1];
+    }
+  }
+
   if (env_vt->vtable->constructor) {
     env_vt->vtable->constructor(obj, args, NULL);
   }

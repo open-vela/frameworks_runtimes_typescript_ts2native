@@ -32,7 +32,7 @@ static int _std_module_init(ts_object_t* self, ts_argument_t args, ts_return_t r
 
 TS_VTABLE_DEF(_std_module_vt, 1/*member count*/) = {
   TS_VTABLE_BASE(
-	TS_MODULE_SIZE(0, VALUES, 0, lang_class_max + 1), // console_class
+	TS_MODULE_SIZE(0, VALUES, 0, lang_class_max + 1, 0), // console_class
 	"std",
 	0,
 	1,
@@ -51,7 +51,8 @@ ts_module_t* ts_create_std_module(ts_runtime_t* rt) {
 		  0,   // imports
 		  1,   // values,
 		  0,   // functions,
-		  lang_class_max); // classes
+		  lang_class_max, // classes
+		  0); // interfaces
 
   // init classes
   for (int i = 0; i < lang_class_max; i++) {
