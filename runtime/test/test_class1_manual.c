@@ -78,7 +78,7 @@ static int _module_initialize(ts_module_t* obj, ts_argument_t args, ts_return_t 
 // the export module interface
 static TS_VTABLE_DEF(_test_class1_vt, 1/*member count*/) = {
   TS_VTABLE_BASE(
-    TS_MODULE_SIZE(0, 0, 0, 1),
+    TS_MODULE_SIZE(0, 0, 0, 1, 0),
     "test_class1",
     0,
     1,  // member count
@@ -93,7 +93,7 @@ static TS_VTABLE_DEF(_test_class1_vt, 1/*member count*/) = {
 };
 
 TS_EXTERN ts_module_t* _test_class1_module(ts_runtime_t* runtime) {
-  ts_module_t* m = ts_new_module(runtime, &_test_class1_vt.base, 0, 0, 0, 1);
+  ts_module_t* m = ts_new_module(runtime, &_test_class1_vt.base, 0, 0, 0, 1, 0);
 
   ts_init_vtable_env(&m->classes[0], &_person_vt.base, m, NULL);
 

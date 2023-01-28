@@ -25,6 +25,7 @@ typedef struct _ts_vtable_t   ts_vtable_t;
 typedef struct _ts_vtable_env_t   ts_vtable_env_t;
 typedef struct _ts_interface_entry_t ts_interface_entry_t;
 typedef struct _ts_interface_t ts_interface_t;
+typedef struct _ts_interface_meta_t ts_interface_meta_t;
 
 typedef union _ts_value_t {
   int32_t  ival;
@@ -50,12 +51,18 @@ typedef union _ts_member_t {
 } ts_member_t;
 
 struct _ts_interface_entry_t {
-  uint32_t object_offset:16;
-  uint32_t member_offset:16;
+  uint32_t object_offset:16; // by bytes
+  uint32_t member_offset:16; // the member count offset by ts_member_t
 };
 
 struct _ts_interface_t {
   ts_interface_entry_t* interface_entry;
+};
+
+struct _ts_interface_meta_t {
+  const char* interface_name;
+  uint32_t member_count:16;
+  uint32_t supers:16;
 };
 
 struct _ts_vtable_t {
@@ -76,7 +83,18 @@ struct _ts_vtable_t {
   ts_member_t members[N]; \
 } name
 
+#define TS_VTABLE_INTERFACES_DEF(name, MemberN, IntfN) struct { \
+  ts_interface_entry_t interfaces[IntfN]; \
+  ts_vtable_t base; \
+  ts_member_t members[MemberN]; \
+  ts_interface_meta_t* interface_metas[IntfN]; \
+} name
+
 #define TS_VTABLE_THIS_INTERFACE_ENTRY {0, sizeof(ts_vtable_t)}
+#define TS_INTERFACE_ENTRY(index, member_start) { \
+	sizeof(ts_interface_t)*((index) + 1), \
+	ts_method_last +  member_start \
+   }
 #define TS_VTABLE_BASE(size, name, intf_count, mem_count, ctr, dstry, to_str, visitor) \
 {                                 \
   TS_VTABLE_THIS_INTERFACE_ENTRY, \
@@ -90,6 +108,17 @@ struct _ts_vtable_t {
   to_str,                         \
   visitor                         \
 }
+
+#define TS_INTERFACE_DEF(varname, name, member_count) \
+  ts_interface_meta_t varname = {name, member_count, 0}
+
+#define TS_INTERFACE_SUPERS_DEF(varname, super_count) \
+  struct { \
+    ts_interface_meta_t base; \
+    ts_interface_meta_t* supers[super_count]; \
+  } varname
+
+#define TS_OBJECT_SIZE_WITH_INTERFACES(type, N) (sizeof(type) + sizeof(ts_interface_t) * (N))
 
 struct _ts_vtable_env_t {
   ts_interface_entry_t class_interface; // make ts_vtabel_env_t as a interface
@@ -121,15 +150,17 @@ struct _ts_module_t {
   ts_value_t*  values;
   ts_object_t** functions;
   ts_vtable_env_t*  classes;
+  ts_interface_meta_t** interfaces; 
   ts_vtable_env_t   _self_env; // save this env
 };
 
-#define TS_MODULE_SIZE(imports, values, functions, classes) \
+#define TS_MODULE_SIZE(imports, values, functions, classes, interfaces) \
   (sizeof(ts_module_t) + \
    sizeof(ts_module_t*)*(imports) + \
    sizeof(ts_value_t)*(values) + \
    sizeof(ts_function_t)*(functions) + \
-   sizeof(ts_vtable_env_t)*(classes))
+   sizeof(ts_vtable_env_t)*(classes)) + \
+   sizeof(ts_interface_meta_t*)*(interfaces)
 
 typedef enum _ts_module_method_index_t {
   ts_module_initialize_index = ts_method_last,
@@ -196,7 +227,7 @@ static inline ts_object_t* ts_object_to_string(ts_object_t* obj) {
 
 static inline void ts_init_vtable_env(ts_vtable_env_t* vt_env, ts_vtable_t* vt, ts_module_t* own_module, ts_vtable_env_t* super) {
   vt_env->class_interface.object_offset = 0;
-  vt_env->class_interface.member_offset = sizeof(ts_vtable_t);
+  vt_env->class_interface.member_offset = ts_method_last;
   vt_env->vtable = vt;
   vt_env->super = super;
   vt_env->env = own_module;
@@ -232,7 +263,8 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
 		uint32_t imports,
 		uint32_t values,
 		uint32_t functions,
-		uint32_t classes) {
+		uint32_t classes,
+		uint32_t interfaces) {
   ts_vtable_env_t module_vt = {
     TS_VTABLE_THIS_INTERFACE_ENTRY,
     vt,
@@ -249,6 +281,7 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
   m->values =  TS_OFFSET(ts_value_t, m->imports, sizeof(ts_module_t*) * imports);
   m->functions = TS_OFFSET(ts_object_t*, m->values, sizeof(ts_value_t) * values);
   m->classes = TS_OFFSET(ts_vtable_env_t, m->functions, sizeof(ts_function_t*) * functions);
+  m->interfaces = TS_OFFSET(ts_interface_meta_t*, m->classes, sizeof(ts_vtable_env_t) * classes);
 
   if (imports == 0)
     m->imports = NULL;
@@ -260,6 +293,9 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
 
   if (classes == 0)
     m->classes = NULL;
+
+  if (interfaces == 0)
+    m->interfaces = NULL;
 
   return m;
 }
@@ -288,7 +324,24 @@ static inline int ts_method_call(ts_object_t* obj, uint32_t index, ts_argument_t
 
 
 static inline ts_object_t* ts_cast_interface_object(ts_interface_t* self) {
-  return TS_OFFSET(ts_object_t, self, self->interface_entry->object_offset);
+  return TS_OFFSET(ts_object_t, self, (self->interface_entry->object_offset));
+}
+
+static inline ts_interface_meta_t** ts_interface_meta_from_vtable(ts_vtable_t* v) {
+  return TS_OFFSET(ts_interface_meta_t*, v,
+		  sizeof(ts_vtable_t) + sizeof(ts_member_t) * (v->member_count));
+}
+
+static inline ts_interface_t* ts_interface_from_object(ts_object_t* obj, ts_interface_meta_t* intf_meta) {
+  ts_vtable_t* vt = OBJECT_VTABLE(obj);
+  ts_interface_meta_t** meta = ts_interface_meta_from_vtable(vt);
+  for (uint32_t i = 0; i < vt->interfaces_count; i++) {
+    if (meta[i] == intf_meta) {
+      return TS_OFFSET(ts_interface_t, obj, - sizeof(ts_interface_t) * (i + 1));
+    }
+  }
+
+  return NULL;
 }
 
 static inline void* ts_interface_field(ts_interface_t* self, uint32_t index) {
