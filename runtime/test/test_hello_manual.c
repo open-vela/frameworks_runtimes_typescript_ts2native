@@ -16,7 +16,7 @@ static int _module_initialize(ts_module_t* obj, ts_argument_t args, ts_return_t 
 // the export module interface
 static TS_VTABLE_DEF(_test_hello_vt, 1/*member count*/) = {
   TS_VTABLE_BASE(
-    TS_MODULE_SIZE(0, 0, 0, 0),
+    TS_MODULE_SIZE(0, 0, 0, 0, 0),
     "test_hello",
     0,
     1,  // member count
@@ -31,5 +31,5 @@ static TS_VTABLE_DEF(_test_hello_vt, 1/*member count*/) = {
 };
 
 TS_EXTERN ts_module_t* _test_hello_module(ts_runtime_t* runtime) {
-  return (ts_module_t*)ts_new_module(runtime, &_test_hello_vt.base, 0, 0, 0, 0);
+  return (ts_module_t*)ts_new_module(runtime, &_test_hello_vt.base, 0, 0, 0, 0, 0);
 }

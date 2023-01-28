@@ -48,7 +48,7 @@ static void _module_visitor(ts_object_t* self, ts_object_visitor_t visitor, void
 // the export module interface
 static TS_VTABLE_DEF(_test_function1_vt, 1/*member count*/) = {
   TS_VTABLE_BASE(
-    TS_MODULE_SIZE(0, 1/*values*/, 2/*functions*/, 2/*classes of functions*/),
+    TS_MODULE_SIZE(0, 1/*values*/, 2/*functions*/, 2/*classes of functions*/, 0),
     "test_class1",
     0,
     1,  // member count
@@ -63,7 +63,7 @@ static TS_VTABLE_DEF(_test_function1_vt, 1/*member count*/) = {
 };
 
 TS_EXTERN ts_module_t* _test_function1_module(ts_runtime_t* runtime) {
-  ts_module_t* m = ts_new_module(runtime, &_test_function1_vt.base, 0, 1, 2, 2);
+  ts_module_t* m = ts_new_module(runtime, &_test_function1_vt.base, 0, 1, 2, 2, 0);
 
   m->values[0].object = NULL;  // init the value of "name"
 
