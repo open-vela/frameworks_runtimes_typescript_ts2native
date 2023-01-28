@@ -395,8 +395,8 @@ static void ts_gc_mark_all_slots(ts_gc_t* gc) {
 }
 
 static void ts_gc_visit_reference_children(ts_object_t* ptr, ts_object_visitor_t visitor) {
-  if (ptr && ptr->vtable_env->vtable->gc_visit)
-    ptr->vtable_env->vtable->gc_visit(ptr, visitor, NULL);
+  if (ptr && OBJECT_VTABLE(ptr)->gc_visit)
+    OBJECT_VTABLE(ptr)->gc_visit(ptr, visitor, NULL);
 }
 
 static void ts_gc_visit_reference(ts_object_t* ptr, ts_object_visitor_t visitor) {
@@ -439,8 +439,8 @@ static void ts_gc_collect_slots(ts_gc_t* gc) {
 
 static void ts_gc_destroy_slot(ts_gc_t* gc, ts_gc_used_slot_t* slot) {
   ts_object_t* obj = TS_OFFSET(ts_object_t, slot, sizeof(ts_gc_used_slot_t));
-  if (obj->vtable_env->vtable->destroy) {
-    obj->vtable_env->vtable->destroy(obj);
+  if (OBJECT_VTABLE(obj)->destroy) {
+    OBJECT_VTABLE(obj)->destroy(obj);
   }
   if (slot->gc_data.has_weak) {
     ts_gc_weak_clear(gc, obj);

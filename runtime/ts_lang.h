@@ -61,16 +61,16 @@ typedef enum _ts_lang_classes_t {
 } ts_lang_classes_t;
 
 
-static inline ts_string_t* ts_new_string(ts_runtime_t* rt, const char* str, ts_boolean_t is_const) {
+static inline ts_object_t* ts_new_string(ts_runtime_t* rt, const char* str, ts_boolean_t is_const) {
   TS_DEF_ARGUMENTS(2);
   TS_SET_INT_ARG(is_const);
   TS_SET_STR_ARG(str);
 
-  return (ts_string_t*)ts_new_object(rt,
+  return ts_new_object(rt,
 	&(rt->std_module->classes[lang_class_string]), TS_ARGUMENTS);
 }
 
-static inline ts_string_t* ts_new_string_format(ts_runtime_t* rt, const char* format, ...) {
+static inline ts_object_t* ts_new_string_format(ts_runtime_t* rt, const char* format, ...) {
   char buffer[TS_STR_FORMAT_SIZE];
   va_list vargs;
   va_start(vargs, format);
@@ -157,8 +157,42 @@ static inline ts_object_t* ts_string_init(ts_runtime_t* rt, ts_object_t* obj, co
   return obj;
 }
 
+static inline ts_object_t* ts_string_dup(ts_object_t* obj) {
+  if (!obj) return NULL;
+  ts_debug_check(ts_object_get_lang_class_index(obj) == lang_class_string,
+		"object %p(%s) is not string", obj, OBJECT_VTABLE(obj)->object_name);
+
+  ts_string_t* str = (ts_string_t*)obj;
+  return ts_new_string(ts_runtime_from_object(obj), (const char*)str->buffer, str->is_const);
+}
+
 #define TS_STRING_NEW_STACK(rt, c_str) \
   ts_string_init(rt, (ts_object_t*)(alloca(sizeof(ts_string_t))), c_str)
+
+
+////////////////////////////////////////////////////////////
+// function utils
+static inline ts_object_t* _ts_function_to_string(ts_object_t* self) {
+  return ts_new_string_format(ts_runtime_from_object(self),
+		  "TS Function %s (%p)", OBJECT_VTABLE(self)->object_name, self);
+}
+
+#define TS_FUNCTION_VTABLE_DEF(name, func_impl) \
+  TS_VTABLE_DEF(_##name##_vt, 1) = { \
+    TS_VTABLE_BASE( \
+	sizeof(ts_function_t), \
+        #name, \
+	0, \
+	1, \
+	NULL, \
+	NULL, \
+        _ts_function_to_string, \
+	NULL), \
+   { \
+      {.method = (ts_call_t)(func_impl)} \
+   } \
+  }
+
 
 TS_CPP_END
 
