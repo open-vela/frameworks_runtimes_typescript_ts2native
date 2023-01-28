@@ -3,8 +3,16 @@
 #include <ts_std.h>
 #include <ts_lang.h>
 
-static TS_INTERFACE_DEF(_Flyable_meta, "Flyable", 1);
-static TS_INTERFACE_DEF(_Swimming_meta, "Swimming", 1);
+static TS_INTERFACE_DEF(_Flyable_meta, "Flyable", 2);
+static TS_INTERFACE_DEF(_Swimming_meta, "Swimming", 2);
+
+static int _swan_say(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
+  ts_runtime_t* rt = ts_runtime_from_object(self);
+  TS_DEF_ARGUMENTS(1);
+  TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "honk! honk!"));
+  ts_std_console_log(rt, TS_ARGUMENTS);
+  return 0;
+}
 
 static int _swan_fly(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
   ts_runtime_t* rt = ts_runtime_from_object(self);
@@ -22,9 +30,9 @@ static int _swan_swim(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
   return 0;
 }
 
-static TS_VTABLE_INTERFACES_DEF(_swan_vt, 2, 2) = {
+static TS_VTABLE_INTERFACES_DEF(_swan_vt, 4, 2) = {
   { // interfaces
-    TS_INTERFACE_ENTRY(1, 1), // Swimming
+    TS_INTERFACE_ENTRY(1, 2), // Swimming
     TS_INTERFACE_ENTRY(0, 0), // Flyable
   },
 
@@ -32,13 +40,15 @@ static TS_VTABLE_INTERFACES_DEF(_swan_vt, 2, 2) = {
     TS_OBJECT_SIZE_WITH_INTERFACES(ts_object_t, 2),
     "Swan", // name
     2, // interface count
-    2, // member count
+    4, // member count
     NULL, // constructor
     NULL, // destroy
     NULL, // tostring
     NULL), // visitor
   {
+    {.method = _swan_say},
     {.method = _swan_fly},
+    {.method = _swan_say}, // for Swiming interface
     {.method = _swan_swim},
   },
   {  // interfaces
@@ -58,8 +68,11 @@ static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t re
   ts_interface_t* pflyable = ts_interface_from_object(swan, m->interfaces[0]);
   ts_interface_t* pswimming = ts_interface_from_object(swan, m->interfaces[1]);
 
-  ts_interface_method_call(pflyable, 0, NULL, NULL);
-  ts_interface_method_call(pswimming, 0, NULL, NULL);
+  ts_interface_method_call(pflyable, 0, NULL, NULL);  // flyable.say()
+  ts_interface_method_call(pflyable, 1, NULL, NULL);  // flayable.fly()
+
+  ts_interface_method_call(pswimming, 0, NULL, NULL);  // swiming.say()
+  ts_interface_method_call(pswimming, 1, NULL, NULL);  // swiming.swim()
 
 
   TS_POP_LOCAL_SCOPE(rt);
@@ -67,10 +80,10 @@ static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t re
 }
 
 // the export module interface
-static TS_VTABLE_DEF(_test_interface1_vt, 1/*member count*/) = {
+static TS_VTABLE_DEF(_test_interface2_vt, 1/*member count*/) = {
   TS_VTABLE_BASE(
     TS_MODULE_SIZE(0, 0/*values*/, 0/*functions*/, 1/*classes of functions*/, 2/*interface count*/),
-    "test_interface1",
+    "test_interface2",
     0,
     1,  // member count
     NULL,
@@ -83,8 +96,8 @@ static TS_VTABLE_DEF(_test_interface1_vt, 1/*member count*/) = {
   }
 };
 
-TS_EXTERN ts_module_t* _test_interface1_module(ts_runtime_t* runtime) {
-  ts_module_t* m = ts_new_module(runtime, &_test_interface1_vt.base, 0, 0, 0, 1, 2);
+TS_EXTERN ts_module_t* _test_interface2_module(ts_runtime_t* runtime) {
+  ts_module_t* m = ts_new_module(runtime, &_test_interface2_vt.base, 0, 0, 0, 1, 2);
 
   ts_init_vtable_env(&m->classes[0], &_swan_vt.base, m, NULL);
 
