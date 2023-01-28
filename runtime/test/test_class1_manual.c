@@ -6,7 +6,7 @@
 static int _person_constructor(ts_object_t* obj, ts_argument_t args, ts_return_t ret) {
   ts_debug_check(TS_ARG_COUNT(args) == 2, "Person constructor need 2 arguments");
 
-  *TS_OBJECT_MEMBER_OF(ts_object_t*, obj, 0) = ts_object_add_ref(TS_ARG_OBJECT(args, 0));
+  *TS_OBJECT_MEMBER_OF(ts_object_t*, obj, 0) = ts_string_dup(TS_ARG_OBJECT(args, 0));
   *TS_OBJECT_MEMBER_OF(int32_t, obj, sizeof(ts_object_t*)) = TS_ARG_INT(args, 1);
   return 0;
 }

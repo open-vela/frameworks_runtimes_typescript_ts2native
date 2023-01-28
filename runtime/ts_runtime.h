@@ -95,11 +95,11 @@ struct _ts_vtable_t {
 	sizeof(ts_interface_t)*((index) + 1), \
 	ts_method_last +  member_start \
    }
-#define TS_VTABLE_BASE(size, name, intf_count, mem_count, ctr, dstry, to_str, visitor) \
+#define TS_VTABLE_SUPER_BASE(size, name, super, intf_count, mem_count, ctr, dstry, to_str, visitor) \
 {                                 \
   TS_VTABLE_THIS_INTERFACE_ENTRY, \
   name,                           \
-  NULL,                           \
+  super,                          \
   size,                           \
   intf_count,                     \
   mem_count,                      \
@@ -108,6 +108,9 @@ struct _ts_vtable_t {
   to_str,                         \
   visitor                         \
 }
+
+#define TS_VTABLE_BASE(size, name, intf_count, mem_count, ctr, dstry, to_str, visitor) \
+  TS_VTABLE_SUPER_BASE(size, name, NULL, intf_count, mem_count, ctr, dstry, to_str, visitor)
 
 #define TS_INTERFACE_DEF(varname, name, member_count) \
   ts_interface_meta_t varname = {name, member_count, 0}
@@ -123,7 +126,7 @@ struct _ts_vtable_t {
 struct _ts_vtable_env_t {
   ts_interface_entry_t class_interface; // make ts_vtabel_env_t as a interface
   ts_vtable_t* vtable;
-  ts_vtable_env_t* super;
+  ts_vtable_env_t* super; // TODO no use class extends only in one module
   ts_module_t* env;
 };
 
@@ -322,6 +325,25 @@ static inline int ts_method_call(ts_object_t* obj, uint32_t index, ts_argument_t
   return (member.method)(obj, args, ret);
 }
 
+static inline int ts_super_call(ts_object_t* obj, uint32_t index, ts_argument_t args, ts_return_t ret) {
+  ts_debug_check(obj != NULL, "object is NULL");
+  ts_debug_check(OBJECT_VTABLE(obj)->super != NULL,
+		  "object %p(\"%s\") \'s super is NULL", obj, OBJECT_VTABLE(obj)->object_name);
+  ts_member_t member = ts_vtable_member(OBJECT_VTABLE(obj)->super, index);
+  return (member.method)(obj, args, ret);
+}
+
+static inline void ts_super_destroy(ts_object_t* obj) {
+  if (OBJECT_VTABLE(obj)->super->destroy) {
+    OBJECT_VTABLE(obj)->super->destroy(obj);
+  }
+}
+
+static inline void ts_super_visit(ts_object_t* obj, ts_object_visitor_t visitor, void* user_data) {
+  if (OBJECT_VTABLE(obj)->super->gc_visit) {
+    OBJECT_VTABLE(obj)->super->gc_visit(obj, visitor, user_data);
+  }
+}
 
 static inline ts_object_t* ts_cast_interface_object(ts_interface_t* self) {
   return TS_OFFSET(ts_object_t, self, (self->interface_entry->object_offset));
@@ -362,6 +384,9 @@ static inline int ts_interface_method_call(ts_interface_t* self, uint32_t index,
 
 #define TS_OBJECT_MEMBER_OF(Type, obj, offset) \
   TS_OFFSET(Type, obj, sizeof(ts_object_t) + (offset))
+
+#define TS_OBJECT_SIZE(obj)  (OBJECT_VTABLE(obj)->object_size)
+#define TS_OBJECT_SUPER_SIZE(obj) (OBJECT_VTABLE(obj)->super->object_size)
 
 /////////////////////////////////////////////
 // object functions
