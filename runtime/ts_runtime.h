@@ -10,6 +10,9 @@
 
 TS_CPP_BEGIN
 
+#define OBJECT_VTABLE(obj)  ((obj)->vtable_env->vtable)
+
+
 typedef int ts_boolean_t;
 #define ts_true  1
 #define ts_false 0
@@ -116,7 +119,7 @@ struct _ts_module_t {
   ts_runtime_t *runtime;
   ts_module_t** imports;
   ts_value_t*  values;
-  ts_function_t** functions;
+  ts_object_t** functions;
   ts_vtable_env_t*  classes;
   ts_vtable_env_t   _self_env; // save this env
 };
@@ -142,7 +145,6 @@ struct _ts_function_t {
 typedef enum _ts_function_method_index_t {
   ts_function_call_index = ts_method_last,
 } ts_function_method_index_t;
-
 
 //////////////////////////////
 // ts_runtime
@@ -188,8 +190,8 @@ static inline void ts_object_init(ts_object_t* self, ts_vtable_env_t* vt_env, ts
 }
 
 static inline ts_object_t* ts_object_to_string(ts_object_t* obj) {
-  return obj && obj->vtable_env->vtable->to_string ?
-	obj->vtable_env->vtable->to_string(obj) : NULL;
+  return obj && OBJECT_VTABLE(obj)->to_string ?
+	OBJECT_VTABLE(obj)->to_string(obj) : NULL;
 }
 
 static inline void ts_init_vtable_env(ts_vtable_env_t* vt_env, ts_vtable_t* vt, ts_module_t* own_module, ts_vtable_env_t* super) {
@@ -245,7 +247,7 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
 
   m->imports = TS_OFFSET(ts_module_t*, m, sizeof(ts_module_t));
   m->values =  TS_OFFSET(ts_value_t, m->imports, sizeof(ts_module_t*) * imports);
-  m->functions = TS_OFFSET(ts_function_t*, m->values, sizeof(ts_value_t) * values);
+  m->functions = TS_OFFSET(ts_object_t*, m->values, sizeof(ts_value_t) * values);
   m->classes = TS_OFFSET(ts_vtable_env_t, m->functions, sizeof(ts_function_t*) * functions);
 
   if (imports == 0)
@@ -272,15 +274,15 @@ static inline ts_member_t ts_vtable_member(ts_vtable_t* vtable, uint32_t member_
 
 static inline void* ts_field_of(ts_object_t* obj, uint32_t index) {
   ts_debug_check(obj != NULL, "object is NULL");
-  ts_member_t member = ts_vtable_member(obj->vtable_env->vtable, index);
+  ts_member_t member = ts_vtable_member(OBJECT_VTABLE(obj), index);
   return TS_OFFSET(void, obj, member.field);
 }
 
 static inline int ts_method_call(ts_object_t* obj, uint32_t index, ts_argument_t args, ts_return_t ret) {
   ts_debug_check(obj != NULL, "object is NULL");
-  ts_member_t member = ts_vtable_member(obj->vtable_env->vtable, index);
+  ts_member_t member = ts_vtable_member(OBJECT_VTABLE(obj), index);
   ts_debug_check(member.method != NULL, \
-		 "method %d of \"%s\" is NULL", index, obj->vtable_env->vtable->object_name);
+		 "method %d of \"%s\" is NULL", index, OBJECT_VTABLE(obj)->object_name);
   return (member.method)(obj, args, ret);
 }
 
@@ -308,13 +310,35 @@ static inline int ts_interface_method_call(ts_interface_t* self, uint32_t index,
 #define TS_OBJECT_MEMBER_OF(Type, obj, offset) \
   TS_OFFSET(Type, obj, sizeof(ts_object_t) + (offset))
 
+/////////////////////////////////////////////
+// object functions
+inline static ts_object_t* ts_reset_object(ts_object_t** dst, ts_object_t* src) {
+  ts_object_release(*dst);
+  *dst = src;
+  return *dst;
+}
+
+inline static ts_object_t* ts_reset_object_add_ref(ts_object_t** dst, ts_object_t* src) {
+  return ts_object_add_ref(ts_reset_object(dst, src));
+}
+
 ///////////////////////////////////////////////
 // module method
-inline static ts_value_t ts_module_value_of(ts_module_t* module, int index) {
-  return module->values[index]; 
+inline static ts_value_t* ts_module_value_of(ts_module_t* module, int index) {
+  return &module->values[index]; 
 }
+
 inline static ts_object_t* ts_module_object_of(ts_module_t* module, int index) {
-  return ts_module_value_of(module, index).object;
+  return ts_module_value_of(module, index)->object;
+}
+
+inline static ts_object_t* ts_module_function_of(ts_module_t* module, int index) {
+  return module->functions[index];
+}
+
+inline static int ts_module_call_function(ts_module_t* module, int index, ts_argument_t args, ts_return_t ret) {
+  return ts_method_call(ts_module_function_of(module, index),
+	   ts_function_call_index, args, ret);
 }
 
 inline static void ts_module_initialize(ts_module_t* module) {
@@ -383,6 +407,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_ARG_DOUBLE(args, i)  (args)[(i)+1].dval
 #define TS_ARG_OBJECT(args, i)  (args)[(i)+1].object
 #define TS_ARG_STR(args, i)     (args)[(i)+1].str
+
 
 TS_CPP_END
 
