@@ -60,8 +60,8 @@ ts_runtime_t* ts_runtime_create(int argc, const char* argv[]) {
 }
 
 void ts_runtime_destroy(ts_runtime_t* rt) {
-  ts_gc_destroy(rt->gc);
   _delete_object(rt->gc, &rt->std_module->base);
+  ts_gc_destroy(rt->gc);
   free(rt);
 }
 
