@@ -32,8 +32,8 @@ struct _ts_gc_free_slot_t {
 };
 
 struct _ts_gc_data_t {
-  uint32_t prev_offset: 14;
-  uint32_t next_offset: 14;
+  uint32_t prev_offset: 14;  // by slot size
+  uint32_t next_offset: 14;  // by slot size
   uint32_t marked: 1;
   uint32_t dirty: 1; // playload changed;
   uint32_t has_weak: 1;
