@@ -9,8 +9,19 @@
 
 #define CLUSTER_SIZE  (512 * 1024)
 
-////////////////////////////////////////////
+#define TS_OFFSET_BY_SLOT(p, q, slot_size)  \
+	((((char*)(p)) - ((char*)(q)))/(slot_size))
 
+#define TS_OFFSET_IN_CLUSTER(p, cluster) \
+	TS_OFFSET_BY_SLOT(p, (cluster)->buffer, (cluster)->slot_size)
+
+#define TS_POINTER_BY_SLOT(Type, start, offset, slot_size) \
+	(Type*)(((char*)(start)) + ((offset) * (slot_size)))
+
+#define TS_POINTER_IN_CLUSTER(Type, offset, cluster) \
+	TS_POINTER_BY_SLOT(Type, (cluster)->buffer, offset, (cluster)->slot_size)
+
+////////////////////////////////////////////
 
 
 //////////////////////////////////////////////
@@ -192,17 +203,17 @@ static void* ts_gc_alloc_cluster_slot(ts_gc_cluster_t* cluster, size_t size) {
   used_slot->ref_count = 1;
 
   // insert to used_slot
-  uint16_t offset = (char*)used_slot - (char*)(cluster->buffer);
+  uint16_t offset = TS_OFFSET_IN_CLUSTER(used_slot, cluster);
   used_slot->gc_data.prev_offset = offset;
   used_slot->gc_data.next_offset = offset;
 
   if (cluster->used_header) {
     ts_gc_slot_t  *used_next_slot, *used_prev_slot;
-    used_next_slot = TS_OFFSET(ts_gc_slot_t, cluster->buffer, cluster->used_header->gc_data.next_offset);
-    used_prev_slot = TS_OFFSET(ts_gc_slot_t, cluster->buffer, cluster->used_header->gc_data.prev_offset);
+    used_next_slot = TS_POINTER_IN_CLUSTER(ts_gc_slot_t, cluster->used_header->gc_data.next_offset, cluster);
+    used_prev_slot = TS_POINTER_IN_CLUSTER(ts_gc_slot_t, cluster->used_header->gc_data.prev_offset, cluster);
 
-    used_slot->gc_data.next_offset = (char*)(cluster->used_header) - (char*)(cluster->buffer);
-    used_slot->gc_data.prev_offset = (char*)used_prev_slot - (char*)(cluster->buffer);
+    used_slot->gc_data.next_offset = TS_OFFSET_IN_CLUSTER(cluster->used_header, cluster);
+    used_slot->gc_data.prev_offset = TS_OFFSET_IN_CLUSTER(used_prev_slot, cluster);
     used_prev_slot->header.used.gc_data.next_offset = offset;
     used_next_slot->header.used.gc_data.prev_offset = offset;
     cluster->used_header = used_slot;
@@ -368,11 +379,11 @@ static void ts_gc_mark_cluster_slots(ts_gc_cluster_entry_t* cluster_entry) {
   for (ts_gc_cluster_t* cluster = cluster_entry->header;
 		  cluster; cluster = cluster->next) {
     ts_gc_used_slot_t* slot = cluster->used_header;
-    uint16_t offset = (char*)(cluster->used_header) - (char*)(cluster->buffer);
+    uint16_t offset = TS_OFFSET_IN_CLUSTER(cluster->used_header, cluster);
 
     do {
       slot->gc_data.marked = 1;
-      slot = TS_OFFSET(ts_gc_used_slot_t, cluster->buffer, slot->gc_data.next_offset);
+      slot = TS_POINTER_IN_CLUSTER(ts_gc_used_slot_t, slot->gc_data.next_offset, cluster);
     } while (slot->gc_data.next_offset != offset);
   }
 }
@@ -453,12 +464,12 @@ static void ts_gc_free_cluster_garbage(ts_gc_t* gc, ts_gc_cluster_t* cluster) {
     return;
   }
 
-  uint16_t offset = (char*)(cluster->used_header) - (char*)(cluster->buffer);
+  uint16_t offset = TS_OFFSET_IN_CLUSTER(cluster->used_header, cluster);
   ts_gc_used_slot_t *slot = cluster->used_header;
 
   do {
     uint16_t next_offset = slot->gc_data.next_offset;
-    ts_gc_used_slot_t* next = TS_OFFSET(ts_gc_used_slot_t, cluster->buffer, next_offset);
+    ts_gc_used_slot_t* next = TS_POINTER_IN_CLUSTER(ts_gc_used_slot_t, next_offset, cluster);
     if (slot->gc_data.marked) {
       // free the garbage
       if (slot->ref_count > 0) {
@@ -466,7 +477,7 @@ static void ts_gc_free_cluster_garbage(ts_gc_t* gc, ts_gc_cluster_t* cluster) {
       }
 
       // free the data
-      if (next_offset == ((char*)(cluster->buffer) - (char*)(slot))) { // all is free
+      if (next_offset == TS_OFFSET_IN_CLUSTER(slot, cluster)) { // all is free
         cluster->used_header = NULL;
 	ts_gc_free_slot_t* free_slot = (ts_gc_free_slot_t*)cluster->buffer;
 	free_slot->next_offset = 0;
@@ -477,7 +488,7 @@ static void ts_gc_free_cluster_garbage(ts_gc_t* gc, ts_gc_cluster_t* cluster) {
       }
 
       // free the slot
-      ts_gc_used_slot_t* prev = TS_OFFSET(ts_gc_used_slot_t, cluster->buffer, slot->gc_data.prev_offset);
+      ts_gc_used_slot_t* prev = TS_POINTER_IN_CLUSTER(ts_gc_used_slot_t, slot->gc_data.prev_offset, cluster);
       prev->gc_data.next_offset = slot->gc_data.next_offset;
       next->gc_data.prev_offset = slot->gc_data.prev_offset;
       if (slot == cluster->used_header) {

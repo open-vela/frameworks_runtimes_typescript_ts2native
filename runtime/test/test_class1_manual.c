@@ -73,6 +73,9 @@ static int _module_initialize(ts_module_t* obj, ts_argument_t args, ts_return_t 
   // call say
   ts_method_call(tom, ts_method_last + 0, NULL, NULL);
   ts_method_call(jerry, ts_method_last + 0, NULL, NULL);
+
+  ts_object_release(tom);
+  ts_object_release(jerry);
   return 0;
 }
 // the export module interface
