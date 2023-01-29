@@ -34,6 +34,7 @@ typedef union _ts_value_t {
   double   dval;
   ts_object_t* object;
   char*    str;
+  void*    ptr;
 } ts_value_t;
 typedef const ts_value_t*  ts_argument_t;
 typedef ts_value_t*        ts_return_t;
@@ -181,6 +182,17 @@ typedef enum _ts_function_method_index_t {
 } ts_function_method_index_t;
 
 //////////////////////////////
+//
+typedef struct _ts_std_backend_t {
+  // support by std module
+  void (*on_timeout)(ts_runtime_t* rt, uint64_t timeout);
+
+  // support by the external
+  void* backend_data;
+  uint64_t (*get_current_timeout)(void* data);
+  void (*set_next_timeout)(uint64_t timeout, void* data);
+} ts_std_backend_t;
+
 // ts_runtime
 struct _ts_runtime_t {
   ts_gc_t *gc;
@@ -205,6 +217,7 @@ struct _ts_runtime_t {
   void (*pop_local_scope)(ts_gc_t* gc, ts_gc_local_scope_t* scope);
 
   ts_module_t* std_module; // the std_module;
+  ts_std_backend_t std_backend;
 };
 
 ts_runtime_t* ts_runtime_create(int argc, const char* argv[]);
@@ -454,7 +467,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 // ts arguments
 #define TS_DEF_ARGUMENTS(N)  \
   ts_value_t __arguments[N+1]; \
-  __arguments[0].ival = N; \
+  __arguments[0].lval = ((N)&0xff); \
   ts_value_t* __cur_arg = &__arguments[1]
 
 #define TS_ARGUMENTS  __arguments
@@ -472,12 +485,22 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
   (__cur_arg ++)->dval = arg
 
 #define TS_SET_OBJECT_ARG(arg) \
+  __arguments[0].lval |= (1l << ((__cur_arg - __arguments) + 8 - 1)); \
   (__cur_arg ++)->object = (ts_object_t*)(arg)
 
 #define TS_SET_STR_ARG(c_str) \
   (__cur_arg ++)->str = (char*)(c_str)
 
-#define TS_ARG_COUNT(args)      (args)[0].ival
+#define TS_SET_PTR_ARG(ptr) \
+  (__cur_arg ++)->otr = (void*)(ptr)
+
+#define TS_CHECK_ARG_IS_OBJECT(lval, i)  (((lval) & (1 << (i + 8))) == 1)
+#define TS_GET_ARG_COUNT(lval)  ((lval) & 0xff)
+#define TS_CHECK_ARG_HAS_OBJECTS(lval)   (((lval) >> 8) != 0)
+
+#define TS_ARG_COUNT(args)      TS_GET_ARG_COUNT((args)[0].lval)
+#define TS_ARG_IS_OBJECT(args, i) TS_CHECK_ARG_IS_OBJECT((args)[0].lval, i)
+#define TS_ARG_HAS_OBJECTS(args) TS_CHECK_ARG_HAS_OBJECTS((args)[0].lval)
 #define TS_GET_ARG(args, i)     (args)[(i)+1]
 #define TS_ARG_INT(args, i)     (args)[(i)+1].ival
 #define TS_ARG_INT64(args, i)   (args)[(i)+1].lval
@@ -485,6 +508,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_ARG_DOUBLE(args, i)  (args)[(i)+1].dval
 #define TS_ARG_OBJECT(args, i)  (args)[(i)+1].object
 #define TS_ARG_STR(args, i)     (args)[(i)+1].str
+#define TS_ARG_PTR(args, i)     (args)[(i)+1].ptr
 
 #define TS_RETURN_INT(ret, i)  (ret)->ival = (i)
 #define TS_RETURN_INT64(ret, i)  (ret)->lval = (i)
@@ -492,6 +516,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_RETURN_DOUBLE(ret, f)  (ret)->dval = (f)
 #define TS_RETURN_OBJECT(ret, o)  (ret)->object = (o)
 #define TS_RETURN_STR(ret, s)  (ret)->str = (s)
+#define TS_RETURN_PTR(ret, p)  (ret)->ptr = (p)
 
 TS_CPP_END
 

@@ -10,12 +10,13 @@ test_modules= \
 all:tsshell  $(test_modules)
 
 runtime_objs =          \
-    ts_shell.o            \
+    ts_shell.o          \
     ts_gc.o             \
     ts_lang.o           \
     ts_runtime.o        \
     ts_std.o            \
-    ts_std_console.o
+    ts_std_console.o    \
+    ts_std_timer.o
 
 RT_LDFLAGS =
 
