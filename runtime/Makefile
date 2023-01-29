@@ -6,10 +6,10 @@ test_modules= \
   libtest_interface1.so \
   libtest_interface2.so
 
-all:tsbin  $(test_modules)
+all:tsshell  $(test_modules)
 
 runtime_objs =          \
-    ts_bin.o            \
+    ts_shell.o            \
     ts_gc.o             \
     ts_lang.o           \
     ts_runtime.o        \
@@ -20,7 +20,7 @@ RT_LDFLAGS =
 
 RT_CFLAGS = -I. -g
 
-tsbin: $(runtime_objs)
+tsshell: $(runtime_objs)
 	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl
 
 libtest_hello.so: test/test_hello_manual.o
@@ -48,4 +48,4 @@ test/%.o:test/%.c
 	$(CC) -fPIC -c -o $@ $< $(RT_CFLAGS)
 
 clean:
-	rm -f *.o tsbin *.so test/test_*.o
+	rm -f *.o tsshell *.so test/test_*.o
