@@ -5,7 +5,8 @@ test_modules= \
   libtest_function1.so \
   libtest_function2.so \
   libtest_interface1.so \
-  libtest_interface2.so
+  libtest_interface2.so \
+  libtest_timeout.so
 
 all:tsshell  $(test_modules)
 
@@ -44,6 +45,9 @@ libtest_interface1.so: test/test_interface1_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 
 libtest_interface2.so: test/test_interface2_manual.o
+	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
+
+libtest_timeout.so: test/test_timeout_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 
 %.o:%.c
