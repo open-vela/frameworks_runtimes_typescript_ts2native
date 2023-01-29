@@ -473,7 +473,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_ARGUMENTS  __arguments
 
 #define TS_SET_INT_ARG(arg) \
-  (__cur_arg ++)->ival = arg
+  (__cur_arg ++)->lval = arg
 
 #define TS_SET_LONG_ARG(arg) \
   (__cur_arg ++)->lval = arg
