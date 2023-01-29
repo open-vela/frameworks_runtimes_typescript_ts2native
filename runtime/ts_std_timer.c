@@ -215,15 +215,21 @@ static void _ts_std_timer_on_timeout(ts_runtime_t* rt, uint64_t timeout) {
 
   ts_timer_node_t* node = (ts_timer_node_t*)heap_min(&timer->timer_heap);
   if (node->timeout <= timeout) {
+    // remove node first
+    heap_remove(&timer->timer_heap, &node->node, timer_less_than);
+
     _std_timer_fire(node);
 
-    heap_remove(&timer->timer_heap, &node->node, timer_less_than);
     if (node->repeat) {
       reset_timer_timeout(rt, node, node->repeat); 
-      rt->std_backend.set_next_timeout(node->timeout, rt->std_backend.backend_data);
       heap_insert(&timer->timer_heap, &node->node, timer_less_than);
     } else {
-      heap_remove(&timer->timer_heap, &node->node, timer_less_than);
+      free_timer_node(node);
+    } 
+
+    ts_timer_node_t* min_node = (ts_timer_node_t*)(heap_min(&timer->timer_heap));
+    if (min_node) {
+      rt->std_backend.set_next_timeout( min_node->timeout, rt->std_backend.backend_data);
     }
   }
 }

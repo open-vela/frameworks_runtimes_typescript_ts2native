@@ -75,5 +75,7 @@ ts_module_t* ts_create_std_module(ts_runtime_t* rt) {
 
   // init functions
 
+  // init the backend
+  ts_init_std_timer_backend(rt);
   return m;
 }
