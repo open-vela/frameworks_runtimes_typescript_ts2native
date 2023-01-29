@@ -1,5 +1,5 @@
 *.o
-tsbin
+tsshell
 *.so
 *.js
 *.bak
