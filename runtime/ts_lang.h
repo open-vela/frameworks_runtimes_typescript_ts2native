@@ -177,10 +177,10 @@ static inline ts_object_t* _ts_function_to_string(ts_object_t* self) {
 		  "TS Function %s (%p)", OBJECT_VTABLE(self)->object_name, self);
 }
 
-#define TS_FUNCTION_VTABLE_DEF(name, func_impl) \
+#define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, closure_data_size) \
   TS_VTABLE_DEF(_##name##_vt, 1) = { \
     TS_VTABLE_BASE( \
-	sizeof(ts_function_t), \
+	sizeof(ts_function_t) + (closure_data_size), \
         #name, \
 	0, \
 	1, \
@@ -193,6 +193,22 @@ static inline ts_object_t* _ts_function_to_string(ts_object_t* self) {
    } \
   }
 
+#define TS_FUNCTION_VTABLE_DEF(name, func_impl) \
+    TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, 0)
+
+#define TS_NEW_CLOSURE_FUNC_BEGIN(varname, m, index) \
+    varname = ts_new_object((m)->runtime, &((m)->classes[index]), NULL); do { \
+      uint8_t* __func_closure_data__ptr__ = TS_OFFSET(uint8_t, (varname), sizeof(ts_function_t));
+	
+
+#define TS_ADD_FUNC_CLOSURE_DATA(type, value) \
+      *((type*)(__func_closure_data__ptr__)) = (value); \
+      __func_closure_data__ptr__ += sizeof(type);
+
+#define TS_NEW_CLOSURE_FUNC_END }while(0);
+
+#define TS_FUNC_CLOSURE_DATA(type, func, offset) \
+  TS_OFFSET(type, func, sizeof(ts_function_t) + (offset))
 
 TS_CPP_END
 
