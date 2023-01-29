@@ -425,8 +425,8 @@ inline static void ts_module_initialize(ts_module_t* module) {
 
 /////////////////////////////////////////////////
 // function method
-inline static int ts_function_call(ts_function_t* self, ts_argument_t args, ts_return_t ret) {
-  return ts_method_call(&self->base, ts_function_call_index, args, ret);
+inline static int ts_function_call(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
+  return ts_method_call(self, ts_function_call_index, args, ret);
 }
 //////////////////////////////////////////
 // GC Functions
@@ -486,6 +486,12 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_ARG_OBJECT(args, i)  (args)[(i)+1].object
 #define TS_ARG_STR(args, i)     (args)[(i)+1].str
 
+#define TS_RETURN_INT(ret, i)  (ret)->ival = (i)
+#define TS_RETURN_INT64(ret, i)  (ret)->lval = (i)
+#define TS_RETURN_FLOAT(ret, f)  (ret)->fval = (f)
+#define TS_RETURN_DOUBLE(ret, f)  (ret)->dval = (f)
+#define TS_RETURN_OBJECT(ret, o)  (ret)->object = (o)
+#define TS_RETURN_STR(ret, s)  (ret)->str = (s)
 
 TS_CPP_END
 
