@@ -9,7 +9,7 @@ static int _func_impl_set_new_name(ts_object_t* self, ts_argument_t args, ts_ret
   return 0;
 }
 
-TS_FUNCTION_VTABLE_DEF(set_new_name, _func_impl_set_new_name);
+TS_FUNCTION_VTABLE_DEF(set_new_name, _func_impl_set_new_name, ts_value_object);
 
 static int _func_impl_show_name(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
   ts_runtime_t* rt = ts_runtime_from_object(self);
@@ -20,7 +20,7 @@ static int _func_impl_show_name(ts_object_t* self, ts_argument_t args, ts_return
   return 0;
 }
 
-TS_FUNCTION_VTABLE_DEF(show_name, _func_impl_show_name);
+TS_FUNCTION_VTABLE_DEF(show_name, _func_impl_show_name, ts_value_void);
 
 
 static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t ret) {

@@ -51,6 +51,9 @@ TS_VTABLE_DEF(_std_module_vt, 1/*member count*/) = {
   }
 };
 
+
+extern void ts_std_init_promise_in_std_module(ts_module_t* m);
+
 ts_module_t* ts_create_std_module(ts_runtime_t* rt) {
   ts_module_t* m = ts_new_module(rt, &_std_module_vt.base,
 		  0,   // imports
@@ -68,6 +71,9 @@ ts_module_t* ts_create_std_module(ts_runtime_t* rt) {
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_console_index], ts_get_std_console_vtable(), m, NULL);
   // init timer class
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_timer_index], ts_get_std_timer_vtable(), m, NULL);
+
+  // init promise classes
+  ts_std_init_promise_in_std_module(m);
 
   // init values
   m->values[ts_std_console_index].object = ts_new_object(rt, &m->classes[lang_class_max + ts_std_console_index], NULL);

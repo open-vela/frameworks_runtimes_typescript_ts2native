@@ -169,6 +169,39 @@ static inline ts_object_t* ts_string_dup(ts_object_t* obj) {
 #define TS_STRING_NEW_STACK(rt, c_str) \
   ts_string_init(rt, (ts_object_t*)(alloca(sizeof(ts_string_t))), c_str)
 
+////////////////////////////////////////////////////
+// object to string
+static inline size_t ts_object_to_c_str(ts_object_t* obj, char* buffer, size_t len) {
+  if (obj == NULL) {
+    return snprintf(buffer, len, "NULL");
+  } 
+
+  switch(ts_object_base_type(obj)) {
+    case ts_object_int32:
+      return snprintf(buffer, len, "%d", ((ts_int32_object_t*)(obj))->value);
+    case ts_object_uint32:
+      return snprintf(buffer, len, "%u", ((ts_uint32_object_t*)(obj))->value);
+    case ts_object_int64:
+      return snprintf(buffer, len, "%ld", ((ts_int64_object_t*)(obj))->value);
+    case ts_object_uint64:
+      return snprintf(buffer, len, "%lu", ((ts_uint64_object_t*)(obj))->value);
+    case ts_object_boolean:
+      return snprintf(buffer, len, "%s", ((ts_boolean_object_t*)(obj))->value ? "true" : "false");
+    case ts_object_float:
+      return snprintf(buffer, len, "%f", ((ts_float_object_t*)(obj))->value);
+    case ts_object_double:
+      return snprintf(buffer, len, "%f", ((ts_double_object_t*)(obj))->value);
+    case ts_object_string:
+      return snprintf(buffer, len, "%s", ts_string_get_utf8(obj));
+    default: {
+      ts_object_t* str = ts_object_to_string(obj);
+      size_t n = snprintf(buffer, len, "%s", ts_string_get_utf8(str));
+      ts_object_release(str);
+      return n;
+    }
+  }
+  return 0;
+}
 
 ////////////////////////////////////////////////////////////
 // function utils
@@ -177,25 +210,41 @@ static inline ts_object_t* _ts_function_to_string(ts_object_t* self) {
 		  "TS Function %s (%p)", OBJECT_VTABLE(self)->object_name, self);
 }
 
-#define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, closure_data_size) \
+static inline void ts_closure_one_object_destroy(ts_object_t* self) {
+  ts_object_t* obj = *(TS_OFFSET(ts_object_t*, self, sizeof(ts_function_t)));
+  ts_object_release(obj);
+}
+
+static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_visitor_t visit, void* user_data) {
+  ts_object_t* obj = *(TS_OFFSET(ts_object_t*, self, sizeof(ts_function_t)));
+  if (obj) {
+    visit(obj, user_data);
+  }
+}
+
+#define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, ret_type, closure_data_size, ctr, dstry, visit) \
   TS_VTABLE_DEF(_##name##_vt, 1) = { \
-    TS_BASE_VTABLE_BASE( \
-	sizeof(ts_function_t) + (closure_data_size), \
-        #name, \
-	ts_object_function, \
-	0, \
-	1, \
-	NULL, \
-	NULL, \
-        _ts_function_to_string, \
-	NULL), \
-   { \
+   .base = { \
+      TS_VTABLE_THIS_INTERFACE_ENTRY, \
+      #name,                          \
+      NULL,                           \
+      sizeof(ts_function_t) + (closure_data_size), \
+      0,                              \
+      ts_object_function,             \
+      ret_type,                       \
+      1,                              \
+      (ts_call_t)(ctr),               \
+      (ts_finialize_t)(dstry),        \
+      _ts_function_to_string,         \
+      (ts_gc_visit_t)(visit)          \
+    },                                \
+    {                                 \
       {.method = (ts_call_t)(func_impl)} \
-   } \
+    }                                 \
   }
 
-#define TS_FUNCTION_VTABLE_DEF(name, func_impl) \
-    TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, 0)
+#define TS_FUNCTION_VTABLE_DEF(name, func_impl, ret_type) \
+    TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, ret_type, 0, NULL, NULL, NULL)
 
 #define TS_NEW_CLOSURE_FUNC_BEGIN(varname, m, index) \
     varname = ts_new_object((m)->runtime, &((m)->classes[index]), NULL); do { \
