@@ -28,6 +28,7 @@ typedef struct _ts_interface_t ts_interface_t;
 typedef struct _ts_interface_meta_t ts_interface_meta_t;
 
 typedef enum _ts_value_type_t {
+  ts_value_void,
   ts_value_int,
   ts_value_uint,
   ts_value_int64,
@@ -107,7 +108,8 @@ struct _ts_vtable_t {
   uint32_t object_size:24;
   uint32_t interfaces_count:8;
   uint32_t base_type:8;  // ts_object_base_type_t
-  uint32_t member_count:24;
+  uint32_t function_return_type:8; // ts_value_t, only for function
+  uint32_t member_count:16;
   ts_call_t constructor;
   ts_finialize_t destroy;
   ts_to_string_t to_string;
@@ -139,6 +141,7 @@ struct _ts_vtable_t {
   size,                           \
   intf_count,                     \
   ts_object_object,               \
+  0,   /*function type*/          \
   mem_count,                      \
   ctr,                            \
   dstry,                          \
@@ -154,6 +157,7 @@ struct _ts_vtable_t {
   size,                           \
   intf_count,                     \
   base_type,                      \
+  0, /* function return type*/    \
   mem_count,                      \
   ctr,                            \
   dstry,                          \
@@ -238,6 +242,7 @@ typedef enum _ts_function_method_index_t {
 
 //////////////////////////////
 //
+typedef void* ts_std_task_t;
 typedef struct _ts_std_backend_t {
   // support by std module
   void (*on_timeout)(ts_runtime_t* rt, uint64_t timeout);
@@ -246,6 +251,8 @@ typedef struct _ts_std_backend_t {
   void* backend_data;
   uint64_t (*get_current_timeout)(void* data);
   void (*set_next_timeout)(uint64_t timeout, void* data);
+  ts_std_task_t (*create_task)(void(*task_impl)(void*), void* data, void(*free_data)(void*), void* backend_data);
+  void (*post_task_delay)(ts_std_task_t task, uint32_t delayms, void* data);
 } ts_std_backend_t;
 
 // ts_runtime
@@ -534,6 +541,10 @@ inline static void ts_module_initialize(ts_module_t* module) {
 inline static int ts_function_call(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
   return ts_method_call(self, ts_function_call_index, args, ret);
 }
+
+inline static ts_value_type_t ts_function_return_type(ts_object_t* self) {
+  return self ? OBJECT_VTABLE(self)->function_return_type : ts_value_void;
+}
 //////////////////////////////////////////
 // GC Functions
 inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void* buffer, size_t max_objects) {
@@ -588,7 +599,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_SET_PTR_ARG(ptr) \
   (__cur_arg ++)->otr = (void*)(ptr)
 
-#define TS_CHECK_ARG_IS_OBJECT(lval, i)  (((lval) & (1 << (i + 8))) == 1)
+#define TS_CHECK_ARG_IS_OBJECT(lval, i)  (((lval) & (1 << (i + 8))) != 0)
 #define TS_GET_ARG_COUNT(lval)  ((lval) & 0xff)
 #define TS_CHECK_ARG_HAS_OBJECTS(lval)   (((lval) >> 8) != 0)
 
@@ -604,13 +615,13 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_ARG_STR(args, i)     (args)[(i)+1].str
 #define TS_ARG_PTR(args, i)     (args)[(i)+1].ptr
 
-#define TS_RETURN_INT(ret, i)  (ret)->ival = (i)
-#define TS_RETURN_INT64(ret, i)  (ret)->lval = (i)
-#define TS_RETURN_FLOAT(ret, f)  (ret)->fval = (f)
-#define TS_RETURN_DOUBLE(ret, f)  (ret)->dval = (f)
-#define TS_RETURN_OBJECT(ret, o)  (ret)->object = (o)
-#define TS_RETURN_STR(ret, s)  (ret)->str = (s)
-#define TS_RETURN_PTR(ret, p)  (ret)->ptr = (p)
+#define TS_RETURN_INT(ret, i)     do{if((ret))(ret)->ival = (i);}while(0)
+#define TS_RETURN_INT64(ret, i)   do{if((ret))(ret)->lval = (i);}while(0)
+#define TS_RETURN_FLOAT(ret, f)   do{if((ret))(ret)->fval = (f);}while(0)
+#define TS_RETURN_DOUBLE(ret, f)  do{if((ret))(ret)->dval = (f);}while(0)
+#define TS_RETURN_OBJECT(ret, o)  do{if((ret))(ret)->object = (ts_object_t*)(o);}while(0)
+#define TS_RETURN_STR(ret, s)     do{if((ret))(ret)->str = (s);}while(0)
+#define TS_RETURN_PTR(ret, p)     do{if((ret))(ret)->ptr = (p);}while(0)
 
 TS_CPP_END
 

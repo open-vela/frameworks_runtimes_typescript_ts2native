@@ -82,15 +82,21 @@ static void update_loop_timeout(message_loop_t* loop) {
   }
 }
 
-static void post_task_delay_data(message_loop_t* loop, void(*call)(void*), uint32_t delayus, void* data, void (*free_data)(void*)) {
+static task_t* create_task(message_loop_t* loop, void(*call)(void*), void* data, void (*free_data)(void*)) {
   task_t* task = get_free_task(loop);
   task->next = NULL;
   task->call = call;
   task->data = data;
   task->free = free_data;
+  task->timeout = 0;
+
+  return task;
+}
+
+static void post_task_delay(message_loop_t* loop, task_t* task, uint64_t delayus) {
+  // insert the task
   task->timeout = get_now_us() + delayus;
 
-  // insert the task
   task_t* head = loop->task_header;
   task_t* prev = NULL;
   while (head && head->timeout <= task->timeout) {
@@ -109,16 +115,8 @@ static void post_task_delay_data(message_loop_t* loop, void(*call)(void*), uint3
   update_loop_timeout(loop);
 }
 
-static void post_task_data(message_loop_t* loop, void(*call)(void*), void* data, void(*free_data)(void*)) {
-  post_task_delay_data(loop, call, 0, data, free_data);
-}
-
-static void post_task(message_loop_t* loop, void(*call)(void*)) {
-  post_task_data(loop, call, NULL, NULL);
-}
-
-static void post_task_delay(message_loop_t* loop, void(*call)(void*), uint32_t delayus) {
-  post_task_delay_data(loop, call, delayus, NULL, NULL);
+static void post_task(message_loop_t* loop, task_t* task) {
+  post_task_delay(loop, task, 0);
 }
 
 static void run_loop_task(message_loop_t* loop) {
@@ -129,8 +127,9 @@ static void run_loop_task(message_loop_t* loop) {
     loop->runtime->std_backend.on_timeout(loop->runtime, now);
   }
 
-  task_t* task = loop->task_header;
-  while(task && task->timeout >= now) {
+  while(loop->task_header && loop->task_header->timeout <= now) {
+    task_t* task = loop->task_header;
+    loop->task_header = task->next;
     if (task->call) {
       task->call(task->data);
     }
@@ -138,12 +137,9 @@ static void run_loop_task(message_loop_t* loop) {
       task->free(task->data);
     }
 
-    task_t* tmp = task;
-    task = task->next;
-    free_task(loop, tmp);
+    free_task(loop, task);
   }
 
-  loop->task_header = task;
   update_loop_timeout(loop);
 }
 
@@ -181,6 +177,13 @@ static uint64_t get_loop_current_timeout_ms(void* data) {
   return get_now_us() / 1000;  // ms
 }
 
+static ts_std_task_t loop_create_task(void(*task_impl)(void*), void* data, void(*free_data)(void*), void* backend_data) {
+  return (ts_std_task_t)(create_task((message_loop_t*)backend_data, task_impl, data, free_data));
+}
+static void ts_post_task_delay(ts_std_task_t task, uint32_t delayms, void* data) {
+  post_task_delay((message_loop_t*)data, (task_t*)task, delayms * 1000);
+}
+
 static void set_loop_next_timeout(uint64_t timeout_ms, void* data) {
   message_loop_t* loop = (message_loop_t*)data;
   loop->timer_timeout = timeout_ms * 1000;
@@ -200,6 +203,8 @@ message_loop_t* create_message_loop(ts_runtime_t* rt) {
   rt->std_backend.backend_data = loop;
   rt->std_backend.get_current_timeout = get_loop_current_timeout_ms;
   rt->std_backend.set_next_timeout = set_loop_next_timeout;
+  rt->std_backend.create_task = loop_create_task;
+  rt->std_backend.post_task_delay = ts_post_task_delay;
   
   for(size_t i = 0; i < sizeof(loop->task_buffer) / sizeof(loop->task_buffer[0]) - 1; i ++) {
     loop->task_buffer[i].next = &(loop->task_buffer[i+1]);

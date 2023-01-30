@@ -1,12 +1,13 @@
 test_modules= \
-  libtest_hello.so \
-  libtest_class1.so \
-  libtest_class2.so \
-  libtest_function1.so \
-  libtest_function2.so \
-  libtest_interface1.so \
-  libtest_interface2.so \
-  libtest_timeout.so
+  libtest_hello.so             \
+  libtest_class1.so            \
+  libtest_class2.so            \
+  libtest_function1.so         \
+  libtest_function2.so         \
+  libtest_interface1.so        \
+  libtest_interface2.so        \
+  libtest_timeout.so           \
+  libtest_promise1.so
 
 all:tsshell  $(test_modules)
 
@@ -17,7 +18,8 @@ runtime_objs =          \
     ts_runtime.o        \
     ts_std.o            \
     ts_std_console.o    \
-    ts_std_timer.o
+    ts_std_timer.o      \
+    ts_std_promise.o
 
 RT_LDFLAGS =
 
@@ -50,6 +52,8 @@ libtest_interface2.so: test/test_interface2_manual.o
 libtest_timeout.so: test/test_timeout_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 
+libtest_promise1.so: test/test_promise1_manual.o
+	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 %.o:%.c
 	$(CC) -c -o $@ $< $(RT_CFLAGS)
 
