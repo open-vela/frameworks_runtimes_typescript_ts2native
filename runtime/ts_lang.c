@@ -24,9 +24,10 @@ static ts_object_t* _##name##_to_string(ts_object_t* self) { \
   TS_PRIMITIVE_CTR_DEF(name) \
   TS_PRIMITIVE_TO_STR_DEF(name) \
   TS_VTABLE_DEF(TS_PRIMITVE_VTABLE_NAME(name), 0) = { \
-    TS_VTABLE_BASE(                  \
+    TS_BASE_VTABLE_BASE(                  \
       sizeof(ts_##name##_object_t),  \
       #name,                         \
+      ts_object_##name,              \
       0, /* interface count*/        \
       0, /* member count*/           \
       _##name##_constructor,         \
@@ -81,9 +82,10 @@ static ts_object_t* _string_to_string(ts_object_t* self) {
 }
 
 static TS_VTABLE_DEF(_string_vt, 0/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_BASE_VTABLE_BASE(
     sizeof(ts_string_t),
     "string",
+    ts_object_string,
     0,
     0,
     _string_constructor,
