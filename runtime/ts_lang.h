@@ -179,9 +179,10 @@ static inline ts_object_t* _ts_function_to_string(ts_object_t* self) {
 
 #define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, closure_data_size) \
   TS_VTABLE_DEF(_##name##_vt, 1) = { \
-    TS_VTABLE_BASE( \
+    TS_BASE_VTABLE_BASE( \
 	sizeof(ts_function_t) + (closure_data_size), \
         #name, \
+	ts_object_function, \
 	0, \
 	1, \
 	NULL, \

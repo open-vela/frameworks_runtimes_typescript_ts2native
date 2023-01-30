@@ -76,7 +76,7 @@ static void _module_visitor(ts_object_t* self, ts_object_visitor_t visitor, void
 }
 
 static TS_VTABLE_DEF(_test_function2_vt, 1/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_MODULE_VTABLE_BASE(
      TS_MODULE_SIZE(0, 0/*values*/, 1/*functions*/, 2/*class of functions*/, 0),
      "test_function2",
      0,

@@ -36,7 +36,7 @@ static int _std_module_init(ts_object_t* self, ts_argument_t args, ts_return_t r
 }
 
 TS_VTABLE_DEF(_std_module_vt, 1/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_MODULE_VTABLE_BASE(
 	TS_MODULE_SIZE(0, VALUES, FUNCTIONS, lang_class_max + ts_std_object_last_index + FUNCTIONS, 0), // console_class
 	"std",
 	0,

@@ -51,7 +51,7 @@ static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t re
 }
 
 static TS_VTABLE_DEF(_test_timeout_module_vt, 1/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_MODULE_VTABLE_BASE(
     TS_MODULE_SIZE(0, 1/*values*/, 1/*functions*/, 1/*classes of functions*/, 0),
     "test_timeout",
     0,
