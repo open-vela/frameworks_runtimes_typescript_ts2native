@@ -27,9 +27,10 @@ static int _func_impl_test_timeout(ts_object_t* self, ts_argument_t args, ts_ret
     TS_SET_INT_ARG(n + 1);
     ts_std_set_timeout_params(rt, TS_ARGUMENTS);
   } while(0);
+  return 0;
 }
 
-static TS_FUNCTION_VTABLE_DEF(test_timeout, _func_impl_test_timeout);
+static TS_FUNCTION_VTABLE_DEF(test_timeout, _func_impl_test_timeout, ts_value_void);
 
 
 static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t ret) {

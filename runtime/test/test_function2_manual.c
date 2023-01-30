@@ -9,7 +9,7 @@ static int _func_impl_foo_closure1(ts_object_t* self, ts_argument_t args, ts_ret
   return 0;
 }
 
-static TS_FUNCTION_CLOSURE_VTABLE_DEF(foo_closure1, _func_impl_foo_closure1, sizeof(int32_t));
+static TS_FUNCTION_CLOSURE_VTABLE_DEF(foo_closure1, _func_impl_foo_closure1, sizeof(int32_t), ts_value_int, NULL, NULL, NULL);
 
 static int _func_impl_foo(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
   ts_object_t* TS_NEW_CLOSURE_FUNC_BEGIN(closure1, ts_module_from_object(self), 1)
@@ -20,7 +20,7 @@ static int _func_impl_foo(ts_object_t* self, ts_argument_t args, ts_return_t ret
   return 0;
 }
 
-static TS_FUNCTION_VTABLE_DEF(foo, _func_impl_foo);
+static TS_FUNCTION_VTABLE_DEF(foo, _func_impl_foo, ts_value_object);
 
 
 static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t ret) {
