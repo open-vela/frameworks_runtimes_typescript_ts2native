@@ -81,7 +81,7 @@ static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t re
 
 // the export module interface
 static TS_VTABLE_DEF(_test_interface2_vt, 1/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_MODULE_VTABLE_BASE(
     TS_MODULE_SIZE(0, 0/*values*/, 0/*functions*/, 1/*classes of functions*/, 2/*interface count*/),
     "test_interface2",
     0,

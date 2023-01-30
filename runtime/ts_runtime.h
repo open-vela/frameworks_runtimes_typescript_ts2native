@@ -27,6 +27,40 @@ typedef struct _ts_interface_entry_t ts_interface_entry_t;
 typedef struct _ts_interface_t ts_interface_t;
 typedef struct _ts_interface_meta_t ts_interface_meta_t;
 
+typedef enum _ts_value_type_t {
+  ts_value_int,
+  ts_value_uint,
+  ts_value_int64,
+  ts_value_uint64,
+  ts_value_boolean,
+  ts_value_float,
+  ts_value_double,
+  ts_value_object
+} ts_value_type_t;
+
+typedef enum _ts_object_base_type_t {
+  ts_object_object,
+  ts_object_primitive_begin,
+  ts_object_int32,
+  ts_object_uint32,
+  ts_object_int64,
+  ts_object_uint64,
+  ts_object_boolean,
+  ts_object_float,
+  ts_object_double,
+  ts_object_primitive_end = ts_object_double,
+  ts_object_builtin_begin,
+  ts_object_bigint = ts_object_builtin_begin,
+  ts_object_string,
+  ts_object_array,
+  ts_object_map,
+  ts_object_set,
+  ts_object_builtin_end = ts_object_set,
+
+  ts_object_function,
+  ts_object_module,
+} ts_object_base_type_t;
+
 typedef union _ts_value_t {
   int32_t  ival;
   int64_t  lval;
@@ -72,7 +106,8 @@ struct _ts_vtable_t {
   ts_vtable_t* super;
   uint32_t object_size:24;
   uint32_t interfaces_count:8;
-  uint32_t member_count;
+  uint32_t base_type:8;  // ts_object_base_type_t
+  uint32_t member_count:24;
   ts_call_t constructor;
   ts_finialize_t destroy;
   ts_to_string_t to_string;
@@ -103,12 +138,31 @@ struct _ts_vtable_t {
   super,                          \
   size,                           \
   intf_count,                     \
+  ts_object_object,               \
   mem_count,                      \
   ctr,                            \
   dstry,                          \
   to_str,                         \
   visitor                         \
 }
+
+#define TS_BASE_VTABLE_BASE(size, name, base_type, intf_count, mem_count, ctr, dstry, to_str, visitor) \
+{                                 \
+  TS_VTABLE_THIS_INTERFACE_ENTRY, \
+  name,                           \
+  NULL,                           \
+  size,                           \
+  intf_count,                     \
+  base_type,                      \
+  mem_count,                      \
+  ctr,                            \
+  dstry,                          \
+  to_str,                         \
+  visitor                         \
+}
+
+#define TS_MODULE_VTABLE_BASE(size, name, intf_count, mem_count, ctr, dstry, to_str, visitor) \
+  TS_BASE_VTABLE_BASE(size, name, ts_object_module, intf_count, mem_count, ctr, dstry, to_str, visitor)
 
 #define TS_VTABLE_BASE(size, name, intf_count, mem_count, ctr, dstry, to_str, visitor) \
   TS_VTABLE_SUPER_BASE(size, name, NULL, intf_count, mem_count, ctr, dstry, to_str, visitor)
@@ -129,6 +183,7 @@ struct _ts_vtable_env_t {
   ts_vtable_t* vtable;
   ts_vtable_env_t* super; // TODO no use class extends only in one module
   ts_module_t* env;
+  ts_value_t** static_fields;
 };
 
 typedef enum _ts_method_index_t {
@@ -413,6 +468,40 @@ inline static ts_object_t* ts_reset_object_add_ref(ts_object_t** dst, ts_object_
   return ts_object_add_ref(ts_reset_object(dst, src));
 }
 
+inline static ts_object_base_type_t ts_object_base_type(ts_object_t* obj) {
+  return OBJECT_VTABLE(obj)->base_type;
+}
+
+inline static ts_boolean_t ts_object_is_module(ts_object_t* obj) {
+  return ts_object_base_type(obj) == ts_object_module;
+}
+
+inline static ts_boolean_t ts_object_is_function(ts_object_t* obj) {
+  return ts_object_base_type(obj) == ts_object_function;
+}
+
+inline static ts_boolean_t ts_object_is_primitive(ts_object_t* obj) {
+  return ts_object_base_type(obj) >= ts_object_primitive_begin
+	  && ts_object_base_type(obj) <= ts_object_primitive_end;
+}
+
+inline static ts_boolean_t ts_object_is_string(ts_object_t* obj) {
+  return ts_object_base_type(obj) == ts_object_string;
+}
+
+inline static ts_boolean_t ts_object_is_normal(ts_object_t* obj) {
+  return ts_object_base_type(obj) == ts_object_object;
+}
+
+inline static ts_boolean_t ts_object_instance_of(ts_object_t* obj, ts_vtable_env_t* vt_env) {
+  ts_vtable_env_t* obj_env = obj->vtable_env;
+  while (obj_env) {
+    if (obj_env == vt_env) return ts_true;
+    obj_env = obj_env->super;
+  }
+  return ts_false;
+}
+
 ///////////////////////////////////////////////
 // module method
 inline static ts_value_t* ts_module_value_of(ts_module_t* module, int index) {
@@ -425,6 +514,10 @@ inline static ts_object_t* ts_module_object_of(ts_module_t* module, int index) {
 
 inline static ts_object_t* ts_module_function_of(ts_module_t* module, int index) {
   return module->functions[index];
+}
+
+inline static ts_vtable_env_t* ts_module_class_of(ts_module_t* module, int index) {
+  return &module->classes[index];
 }
 
 inline static int ts_module_call_function(ts_module_t* module, int index, ts_argument_t args, ts_return_t ret) {
@@ -484,9 +577,10 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_SET_DOUBLE_ARG(arg) \
   (__cur_arg ++)->dval = arg
 
-#define TS_SET_OBJECT_ARG(arg) \
+#define TS_SET_OBJECT_ARG(arg) do { \
   __arguments[0].lval |= (1l << ((__cur_arg - __arguments) + 8 - 1)); \
-  (__cur_arg ++)->object = (ts_object_t*)(arg)
+  (__cur_arg ++)->object = (ts_object_t*)(arg); \
+} while(0)
 
 #define TS_SET_STR_ARG(c_str) \
   (__cur_arg ++)->str = (char*)(c_str)

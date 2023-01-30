@@ -35,7 +35,7 @@ static int _person_say(ts_object_t* obj, ts_argument_t args, ts_return_t ret) {
 
 #define PERSION_SIZE (sizeof(ts_object_t) + sizeof(ts_object_t*) + sizeof(uint32_t))
 static TS_VTABLE_DEF(_person_vt, 3/*member count*/) = {
-  TS_VTABLE_BASE(
+  TS_MODULE_VTABLE_BASE(
     PERSION_SIZE, // size
     "Person", // name
     0, // interface count

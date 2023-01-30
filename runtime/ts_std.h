@@ -9,11 +9,37 @@ TS_CPP_BEGIN
 typedef enum _ts_std_object_index_t {
   ts_std_console_index,
   ts_std_timer_index,
+  ts_std_promise_index,
+  ts_std_promise_resolver_index,
+  ts_std_promise_rejector_index,
   ts_std_object_last_index
 } ts_std_object_index_t;
 
 
 ts_module_t* ts_create_std_module(ts_runtime_t* rt);
+
+/////////////////////////////////////////////////////////////////
+//
+inline static ts_boolean_t ts_object_is_std_object(ts_object_t* obj, ts_std_object_index_t type) {
+  return obj->vtable_env == ts_module_class_of(
+	    ts_runtime_from_object(obj)->std_module, type);
+}
+
+inline static ts_boolean_t ts_object_is_console(ts_object_t* obj) {
+  return ts_object_is_std_object(obj, ts_std_console_index);
+}
+
+inline static ts_boolean_t ts_object_is_promise(ts_object_t* obj) {
+  return ts_object_is_std_object(obj, ts_std_promise_index);
+}
+
+inline static ts_boolean_t ts_object_is_resolver(ts_object_t* obj) {
+  return ts_object_is_std_object(obj, ts_std_promise_resolver_index);
+}
+
+inline static ts_boolean_t ts_object_is_rejector(ts_object_t* obj) {
+  return ts_object_is_std_object(obj, ts_std_promise_rejector_index);
+}
 
 ///////////////////////////////////////////////////////////////////
 // console
