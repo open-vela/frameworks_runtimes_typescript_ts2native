@@ -48,6 +48,8 @@ static inline ts_std_awaiter_t* ts_std_new_awaiter(ts_runtime_t* rt, uint32_t da
   awaiter->size = (uint16_t)(sizeof(ts_std_awaiter_t) + data_size);
   awaiter->object_count = (uint16_t)(object_count);
   awaiter->promise = NULL;
+  awaiter->resolver = NULL;
+  awaiter->rejecter = NULL;
 
   return awaiter;
 }
@@ -57,6 +59,8 @@ static inline void ts_std_free_awaiter(ts_runtime_t* rt, ts_std_awaiter_t* await
     return;
   
   ts_object_release(awaiter->promise);
+  ts_object_release(awaiter->resolver);
+  ts_object_release(awaiter->rejecter);
   ts_object_t** objects = TS_STD_AWAITER_OBJECT(awaiter);
   for(uint16_t i = 0; i < awaiter->object_count; i++) {
     ts_object_release(objects[i]);
