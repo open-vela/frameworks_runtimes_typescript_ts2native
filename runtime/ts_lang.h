@@ -222,7 +222,7 @@ static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_v
   }
 }
 
-#define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, ret_type, closure_data_size, ctr, dstry, visit) \
+#define TS_FUNCTIONLIKE_CLOSURE_VTABLE_DEF(name, func_impl, obj_type, ret_type, closure_data_size, ctr, dstry, visit) \
   TS_VTABLE_DEF(_##name##_vt, 1) = { \
    .base = { \
       TS_VTABLE_THIS_INTERFACE_ENTRY, \
@@ -230,7 +230,7 @@ static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_v
       NULL,                           \
       sizeof(ts_function_t) + (closure_data_size), \
       0,                              \
-      ts_object_function,             \
+      obj_type,                       \
       ret_type,                       \
       1,                              \
       (ts_call_t)(ctr),               \
@@ -242,6 +242,9 @@ static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_v
       {.method = (ts_call_t)(func_impl)} \
     }                                 \
   }
+
+#define TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, ret_type, closure_data_size, ctr, dstry, visit) \
+  TS_FUNCTIONLIKE_CLOSURE_VTABLE_DEF(name, func_impl, ts_object_function, ret_type, closure_data_size, ctr, dstry, visit)
 
 #define TS_FUNCTION_VTABLE_DEF(name, func_impl, ret_type) \
     TS_FUNCTION_CLOSURE_VTABLE_DEF(name, func_impl, ret_type, 0, NULL, NULL, NULL)
