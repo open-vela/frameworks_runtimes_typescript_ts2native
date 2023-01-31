@@ -4,6 +4,7 @@
 #include "ts_common.h"
 #include "ts_runtime.h"
 #include "ts_lang.h"
+#include "ts_std_async_await.h"
 
 TS_CPP_BEGIN
 
@@ -11,6 +12,7 @@ typedef enum _ts_std_object_index_t {
   ts_std_console_index,
   ts_std_timer_index,
   ts_std_promise_index,
+  ts_std_promise_awaiter_index,
   ts_std_promise_resolver_index,
   ts_std_promise_rejecter_index,
   ts_std_object_last_index
@@ -35,7 +37,7 @@ static inline void ts_std_post_task(ts_runtime_t* rt, ts_std_task_t task) {
 /////////////////////////////////////////////////////////////////
 //
 inline static ts_boolean_t ts_object_is_std_object(ts_object_t* obj, ts_std_object_index_t type) {
-  return obj->vtable_env == ts_module_class_of(
+  return obj && obj->vtable_env == ts_module_class_of(
 	    ts_runtime_from_object(obj)->std_module, type);
 }
 
@@ -46,6 +48,11 @@ inline static ts_boolean_t ts_object_is_console(ts_object_t* obj) {
 inline static ts_boolean_t ts_object_is_promise(ts_object_t* obj) {
   return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_index);
 }
+
+inline static ts_boolean_t ts_object_is_promise_awaiter(ts_object_t* obj) {
+  return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_awaiter_index);
+}
+
 
 inline static ts_boolean_t ts_object_is_resolver(ts_object_t* obj) {
   return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_resolver_index);
@@ -137,6 +144,13 @@ static inline ts_object_t* ts_std_new_promise(ts_runtime_t* rt, ts_object_t* exe
   }
 }
 
+static inline ts_object_t* ts_std_new_promise_awaiter(ts_runtime_t* rt, ts_object_t* executor) {
+  ts_debug_check(executor != NULL, "promise_awaiter need a executor!");
+  TS_DEF_ARGUMENTS(1);
+  TS_SET_OBJECT_ARG(executor);
+  return ts_new_object(rt, ts_module_class_of(rt->std_module, lang_class_max + ts_std_promise_awaiter_index), TS_ARGUMENTS);
+}
+
 static inline ts_object_t* ts_std_promise_then(ts_object_t* promise, ts_object_t* on_resolve, ts_object_t* on_reject) {
   TS_DEF_ARGUMENTS(2);
   TS_SET_OBJECT_ARG(on_resolve);
@@ -158,6 +172,21 @@ static inline void ts_std_promise_finally(ts_object_t* promise, ts_object_t* on_
   TS_DEF_ARGUMENTS(1);
   TS_SET_OBJECT_ARG(on_finally);
   ts_method_call(promise, ts_method_last + 2, TS_ARGUMENTS, NULL);
+}
+
+static inline void ts_std_promise_then_promise(ts_object_t* promise, ts_object_t* then_promise) {
+  TS_DEF_ARGUMENTS(1);
+  TS_SET_OBJECT_ARG(then_promise);
+  ts_method_call(promise, ts_method_last + 3, TS_ARGUMENTS, NULL);
+}
+
+static inline ts_object_t* ts_std_promise_from(ts_object_t* resolver_or_rejector) {
+  if (ts_object_is_resolver(resolver_or_rejector)
+	|| ts_object_is_rejecter(resolver_or_rejector)) {
+    return *(TS_OFFSET(ts_object_t*, resolver_or_rejector,
+			    sizeof(ts_object_t)));
+  }
+  return NULL;
 }
 
 TS_CPP_END

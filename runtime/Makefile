@@ -7,7 +7,8 @@ test_modules= \
   libtest_interface1.so        \
   libtest_interface2.so        \
   libtest_timeout.so           \
-  libtest_promise1.so
+  libtest_promise1.so          \
+  libtest_async_await.so
 
 all:tsshell  $(test_modules)
 
@@ -53,6 +54,9 @@ libtest_timeout.so: test/test_timeout_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 
 libtest_promise1.so: test/test_promise1_manual.o
+	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
+
+libtest_async_await.so: test/test_async_await_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
 %.o:%.c
 	$(CC) -c -o $@ $< $(RT_CFLAGS)

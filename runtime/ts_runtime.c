@@ -42,6 +42,8 @@ ts_runtime_t* ts_runtime_create(int argc, const char* argv[]) {
   rt->gc = ts_gc_create(NULL);
   rt->new_object = _new_object;
   rt->delete_object = _delete_object;
+  rt->gc_alloc = ts_gc_alloc;
+  rt->gc_free = ts_gc_free;
   // strong ref
   //rt->make_strong_ref = 
   //rt->free_strong_ref =
