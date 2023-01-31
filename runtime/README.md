@@ -9,6 +9,13 @@ test目录下, 以 *_manual.c结尾的文件, 都是对应的ts代码, 手写成
 make
 ```
 ## 运行
+
+### 运行全部test
+```
+make run_tests
+```
+
+### 运行单个例子
 ./tsshell <module_name>
 如
 ```
