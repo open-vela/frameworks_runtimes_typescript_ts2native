@@ -62,16 +62,15 @@ static void _promise_process_resolve(ts_std_promise_t* promise, ts_std_resolve_e
   // call resolve
   ts_value_t ret;
   ts_value_type_t ret_type;
-
-  ts_object_t* callback = resolve->on_finally;
+  ts_object_t* callback = NULL;
 
   if (promise->state == ts_std_promise_fulfiled)
     callback = resolve->on_fulfiled;
   else if (promise->state == ts_std_promise_rejected)
     callback = resolve->on_rejected;
 
-  if (callback && callback == resolve->on_finally) {
-    ts_function_call(callback, NULL, NULL);
+  if (!callback && resolve->on_finally) {
+    ts_function_call(resolve->on_finally, NULL, NULL);
     return;
   }
 
@@ -106,6 +105,11 @@ static void _promise_process_resolve(ts_std_promise_t* promise, ts_std_resolve_e
     ret.lval = promise->result.lval;
     ret_type = promise->resolved_type;
     next_promise->state = promise->state;
+  }
+
+  // call finally if it exist
+  if (resolve->on_finally) {
+    ts_function_call(resolve->on_finally, NULL, NULL);
   }
 
   if (!next_promise) {
