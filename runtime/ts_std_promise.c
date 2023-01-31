@@ -37,7 +37,10 @@ struct _ts_std_promise_t {
   ts_value_t   result;  // the result of resovled or reject
   
   ts_std_task_t  resolve_task;
-  ts_std_resolve_entry_t*  resolves;
+  union {
+    ts_std_resolve_entry_t*  resolves;
+    ts_object_t* executor;
+  };
 };
 
 struct _ts_std_resolver_t {
@@ -52,6 +55,8 @@ struct _ts_std_resolve_entry_t {
   ts_std_promise_t* then;
   ts_std_resolve_entry_t* next;
 };
+
+static void _promise_do_resolve(void* data);
 
 static void _promise_process_resolve(ts_std_promise_t* promise, ts_std_resolve_entry_t* resolve) {
   // call resolve
@@ -71,6 +76,21 @@ static void _promise_process_resolve(ts_std_promise_t* promise, ts_std_resolve_e
   }
 
   ts_std_promise_t* next_promise = resolve->then;
+
+  if (!callback && ts_object_is_promise_awaiter(&next_promise->base)) {
+    if (next_promise->resolve_task == NULL) {
+      next_promise->resolve_task =
+	      ts_std_new_task(
+		 ts_runtime_from_object(&next_promise->base),
+		 _promise_do_resolve,
+		 next_promise, NULL);
+      ts_std_post_task(
+	      ts_runtime_from_object(&next_promise->base),
+	      next_promise->resolve_task);
+    }
+    return;
+  }
+
   if (callback) {
     do {
       TS_DEF_ARGUMENTS(1);
@@ -159,6 +179,23 @@ static ts_object_t* ts_std_promise_new_rejecter(ts_runtime_t* rt, ts_std_promise
 			  lang_class_max + ts_std_promise_rejecter_index), TS_ARGUMENTS);
 }
 
+static void _promise_process_awaiter(ts_std_promise_t* self) {
+  if (self->state != ts_std_promise_pending)
+    return;
+
+  ts_object_t* executor = self->executor;
+  ts_std_awaiter_t* awaiter = ts_std_awaiter_of(executor);
+
+  if (!executor || !awaiter)
+    return;
+
+  // call executor too
+  TS_DEF_ARGUMENTS(2);
+  TS_SET_OBJECT_ARG(awaiter->resolver);
+  TS_SET_OBJECT_ARG(awaiter->rejecter);
+  ts_function_call(executor, TS_ARGUMENTS, NULL);
+}
+
 static void _promise_do_resolve(void* data) {
   ts_std_promise_t* self = (ts_std_promise_t*)data;
   if (!self) {
@@ -166,6 +203,12 @@ static void _promise_do_resolve(void* data) {
   }
 
   self->resolve_task = NULL;
+
+  if (ts_object_is_promise_awaiter(&self->base)) {
+    _promise_process_awaiter(self);
+    return ;
+  }
+
   ts_std_resolve_entry_t* resolves = self->resolves;
   ts_std_resolve_entry_t* resolve = resolves;
 
@@ -271,6 +314,14 @@ static int _std_promise_then(ts_std_promise_t* self, ts_argument_t args, ts_retu
   return _std_promise_then_catch_finally(self, ts_std_on_resolve, args, ret);
 }
 
+static int _std_promise_then_promise(ts_std_promise_t* self, ts_argument_t args, ts_return_t ret) {
+  // insert a promise a next promise
+  ts_std_promise_t* promise = (ts_std_promise_t*)(TS_ARG_OBJECT(args, 0));
+  ts_std_promise_insert_then(self, promise);
+  ts_std_promise_async_resolve(self);
+  return 0;
+}
+
 static int _std_promise_catch(ts_std_promise_t* self, ts_argument_t args, ts_return_t ret) {
   return _std_promise_then_catch_finally(self, ts_std_on_reject, args, ret);
 }
@@ -297,6 +348,14 @@ static int _std_promise_constructor(ts_std_promise_t* self, ts_argument_t args, 
   ts_object_t* resolver = ts_std_promise_new_resolver(rt, self);
   ts_object_t* rejecter = ts_std_promise_new_rejecter(rt, self);
 
+  if (ts_object_is_promise_awaiter(&self->base)) {
+    ts_std_awaiter_t* awaiter = ts_std_awaiter_of(executor);
+    awaiter->promise = &self->base;
+    awaiter->resolver = resolver;
+    awaiter->rejecter = rejecter;
+    self->executor = executor;
+  }
+
   do {
     TS_DEF_ARGUMENTS(2);
     TS_SET_OBJECT_ARG(resolver);
@@ -306,7 +365,10 @@ static int _std_promise_constructor(ts_std_promise_t* self, ts_argument_t args, 
 }
 
 static void _std_promise_destroy(ts_std_promise_t* self) {
-  ts_std_free_resolves(self->resolves);
+  if (ts_object_is_promise(&self->base)) {
+    ts_std_free_resolves(self->resolves);
+  }
+
   if (self->resolved_type == ts_value_object)
     ts_object_release(self->result.object);
 }
@@ -344,12 +406,12 @@ static TS_FUNCTION_CLOSURE_VTABLE_DEF(std_promise_rejecter,
 		_std_promise_resolver_rejecter_destroy,
 		_std_promise_resolver_rejecter_gc_visit);
 
-static TS_VTABLE_DEF(_std_promise_vt, 3/*member count*/) = {
+static TS_VTABLE_DEF(_std_promise_vt, 4/*member count*/) = {
   TS_VTABLE_BASE(
     sizeof(ts_std_promise_t),
     "std_promise",
     0, // interface count
-    3, // member count
+    4, // member count
     (ts_call_t) _std_promise_constructor,
     (ts_finialize_t) _std_promise_destroy,
     NULL, // to_string
@@ -360,12 +422,14 @@ static TS_VTABLE_DEF(_std_promise_vt, 3/*member count*/) = {
     {.method = (ts_call_t) _std_promise_then},
     {.method = (ts_call_t) _std_promise_catch},
     {.method = (ts_call_t) _std_promise_finally},
+    {.method = (ts_call_t) _std_promise_then_promise},
   }
 };
 
 void ts_std_init_promise_in_std_module(ts_module_t* m) {
 
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_promise_index], &_std_promise_vt.base, m, NULL);
+  ts_init_vtable_env(&m->classes[lang_class_max + ts_std_promise_awaiter_index], &_std_promise_vt.base, m, NULL);
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_promise_resolver_index], &_std_promise_resolver_vt.base, m, NULL);
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_promise_rejecter_index], &_std_promise_rejecter_vt.base, m, NULL);
 }

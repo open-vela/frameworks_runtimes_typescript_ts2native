@@ -59,6 +59,7 @@ typedef enum _ts_object_base_type_t {
   ts_object_builtin_end = ts_object_set,
 
   ts_object_function,
+  ts_object_function_awaiter, // awaiter wrapper of async function
   ts_object_module,
 } ts_object_base_type_t;
 
@@ -261,6 +262,8 @@ struct _ts_runtime_t {
   // new / delete object
   ts_object_t* (* new_object)(ts_gc_t*, ts_vtable_env_t*, ts_argument_t);
   void (* delete_object)(ts_gc_t*, ts_object_t*);
+  void* (*gc_alloc)(ts_gc_t*, size_t size);
+  void  (*gc_free)(ts_gc_t*, void*);
 
   // strong reference
   ts_gc_strong_ptr_t (*make_strong_ref)(ts_gc_t*, void* ptr);
@@ -485,6 +488,10 @@ inline static ts_boolean_t ts_object_is_module(ts_object_t* obj) {
 
 inline static ts_boolean_t ts_object_is_function(ts_object_t* obj) {
   return ts_object_base_type(obj) == ts_object_function;
+}
+
+inline static ts_boolean_t ts_object_is_function_awaiter(ts_object_t* obj) {
+  return ts_object_base_type(obj) == ts_object_function_awaiter;
 }
 
 inline static ts_boolean_t ts_object_is_primitive(ts_object_t* obj) {
