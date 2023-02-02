@@ -8,7 +8,8 @@ test_modules= \
   test_interface2        \
   test_timeout           \
   test_promise1          \
-  test_async_await
+  test_async_await       \
+  test_union1
 
 test_module_targets=$(foreach m, $(test_modules), lib$(m).so)
 run_test_modules=$(foreach m, $(test_modules), echo "\n\n== RUN \"./tsshell $(m)\" ===" && ./tsshell $(m) &&)

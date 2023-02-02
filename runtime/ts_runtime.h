@@ -395,6 +395,13 @@ static inline void* ts_field_of(ts_object_t* obj, uint32_t index) {
   return TS_OFFSET(void, obj, member.field);
 }
 
+#define TS_GET_FIELD(type, self, index) \
+   (*((type*)ts_field_of(self, (index))))
+
+#define TS_SET_FIELD(type, self, index, value) do{ \
+   (*((type*)ts_field_of(self, (index)))) = (value); \
+ } while(0)
+
 static inline int ts_method_call(ts_object_t* obj, uint32_t index, ts_argument_t args, ts_return_t ret) {
   ts_debug_check(obj != NULL, "object is NULL");
   ts_member_t member = ts_vtable_member(OBJECT_VTABLE(obj), index);
