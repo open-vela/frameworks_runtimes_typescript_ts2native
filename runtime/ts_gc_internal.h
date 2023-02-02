@@ -159,6 +159,7 @@ void  ts_gc_weak_clear(ts_gc_t* gc, void* ptr);
 
 void ts_gc_push_local_scope(ts_gc_t* gc, ts_gc_local_scope_t* scope);
 void ts_gc_pop_local_scope(ts_gc_t* gc, ts_gc_local_scope_t* scope);
+ts_gc_local_scope_t* ts_gc_get_local_scope(ts_gc_t* gc);
 
 TS_CPP_END
 

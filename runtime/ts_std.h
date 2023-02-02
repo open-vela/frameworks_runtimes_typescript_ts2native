@@ -15,6 +15,7 @@ typedef enum _ts_std_object_index_t {
   ts_std_promise_awaiter_index,
   ts_std_promise_resolver_index,
   ts_std_promise_rejecter_index,
+  ts_std_exception_error_index,
   ts_std_object_last_index
 } ts_std_object_index_t;
 
