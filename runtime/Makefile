@@ -9,7 +9,8 @@ test_modules= \
   test_timeout           \
   test_promise1          \
   test_async_await       \
-  test_union1
+  test_union1            \
+  test_trycatch
 
 test_module_targets=$(foreach m, $(test_modules), lib$(m).so)
 run_test_modules=$(foreach m, $(test_modules), echo "\n\n== RUN \"./tsshell $(m)\" ===" && ./tsshell $(m) &&)
@@ -24,7 +25,8 @@ runtime_objs =          \
     ts_std.o            \
     ts_std_console.o    \
     ts_std_timer.o      \
-    ts_std_promise.o
+    ts_std_promise.o    \
+    ts_exception.o
 
 RT_LDFLAGS =
 

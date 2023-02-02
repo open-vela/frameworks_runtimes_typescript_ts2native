@@ -692,3 +692,7 @@ void ts_gc_pop_local_scope(ts_gc_t* gc, ts_gc_local_scope_t* scope) {
     gc->local_scope = scope->prev;
   }
 }
+
+ts_gc_local_scope_t* ts_gc_get_local_scope(ts_gc_t* gc) {
+  return gc->local_scope;
+}
