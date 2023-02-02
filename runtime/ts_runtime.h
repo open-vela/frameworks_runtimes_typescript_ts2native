@@ -17,6 +17,8 @@ typedef int ts_boolean_t;
 #define ts_true  1
 #define ts_false 0
 
+typedef struct _ts_try_block_t ts_try_block_t;
+
 typedef struct _ts_runtime_t  ts_runtime_t;
 typedef struct _ts_object_t   ts_object_t;
 typedef struct _ts_module_t   ts_module_t;
@@ -247,6 +249,7 @@ typedef void* ts_std_task_t;
 typedef struct _ts_std_backend_t {
   // support by std module
   void (*on_timeout)(ts_runtime_t* rt, uint64_t timeout);
+  void (*on_root_exception)(ts_runtime_t* rt);
 
   // support by the external
   void* backend_data;
@@ -280,6 +283,10 @@ struct _ts_runtime_t {
   // local reference
   void (*push_local_scope)(ts_gc_t* gc, ts_gc_local_scope_t* scope);
   void (*pop_local_scope)(ts_gc_t* gc, ts_gc_local_scope_t* scope);
+  ts_gc_local_scope_t* (*get_top_local_scope)(ts_gc_t* gc);
+
+  ts_try_block_t* try_block;
+  ts_object_t*    exception_value;
 
   ts_module_t* std_module; // the std_module;
   ts_std_backend_t std_backend;

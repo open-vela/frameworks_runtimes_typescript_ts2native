@@ -1,5 +1,8 @@
 
 #include "ts_runtime.h"
+#include "ts_exception.h"
+#include "ts_std.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -251,22 +254,28 @@ int main(int argc, const char* argv[]) {
 
   ts_runtime_t* rt = ts_runtime_create(argc, argv);
 
-  ts_module_t* m = load_module(argv[1], rt);
-  if (m) {
-    TS_PUSH_LOCAL_SCOPE(rt, 1);
-    TS_SET_LOCAL_OBJECT(0, m);
+  TS_TRY_BEGIN(rt)
+    ts_module_t* m = load_module(argv[1], rt);
+    if (m) {
+      TS_PUSH_LOCAL_SCOPE(rt, 1);
+      TS_SET_LOCAL_OBJECT(0, m);
 
-    message_loop_t* loop = create_message_loop(rt);
+      message_loop_t* loop = create_message_loop(rt);
 
-    // call initialize
-    ts_module_initialize(m);
-    while(message_loop_has_more(loop)) {
-      run_loop(loop);
+      // call initialize
+      ts_module_initialize(m);
+      while(message_loop_has_more(loop)) {
+        run_loop(loop);
+      }
+
+      free_messasge_loop(loop);
+      TS_POP_LOCAL_SCOPE(rt);
     }
-
-    free_messasge_loop(loop);
-    TS_POP_LOCAL_SCOPE(rt);
-  }
-
+  TS_CATCH(err)
+    TS_DEF_ARGUMENTS(2);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "TS Error:"));
+    TS_SET_OBJECT_ARG(err);
+    ts_std_console_log(rt, TS_ARGUMENTS);
+  TS_TRY_END
   ts_runtime_destroy(rt);
 }

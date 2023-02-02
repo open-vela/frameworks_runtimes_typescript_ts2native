@@ -55,6 +55,7 @@ ts_runtime_t* ts_runtime_create(int argc, const char* argv[]) {
 
   rt->push_local_scope = ts_gc_push_local_scope;
   rt->pop_local_scope = ts_gc_pop_local_scope;
+  rt->get_top_local_scope = ts_gc_get_local_scope;
 
   rt->std_module = ts_create_std_module(rt);
 
