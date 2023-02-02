@@ -263,6 +263,32 @@ static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_v
 #define TS_FUNC_CLOSURE_DATA(type, func, offset) \
   TS_OFFSET(type, func, sizeof(ts_function_t) + (offset))
 
-TS_CPP_END
+
+///////////////////////////////////////////////////////
+// TS_UNION
+#ifndef UNLINK
+#define UNLINK(x)  x
+#endif
+
+#define TS_INIT_UNION_OBJECT(obj, members, out_obj, indexes) do { \
+  (out_obj) = ((typeof(out_obj))(((uintptr_t)(obj)) & ~3)); \
+  (indexes) = (members)[((uintptr_t)(obj)) & 3]; \
+ }while(0)
+
+#define TS_UNION_INDEX(obj, index) \
+  ((typeof(obj))(((uintptr_t)(obj))|((index)&3)))
+
+#define TS_BEGIN_UNION_OBJECT_(obj, indexes) do { \
+  register typeof(obj) __obj__ = (out_obj); \
+  register typeof(obj)* __pindexes__ = &(indexes);
+
+#define TS_CHECK_UNION(module, index, member_list) \
+  if (ts_object_instance_of(__obj__, ts_module_class_of(module, index))) { \
+    static uint32_t __member_indexes__ = member_list; \
+    *__pindexes__ = __member_indexes__; \
+  } else
+
+#define TS_END_UNION_OBJECT  {} /*else block*/ } while(0);
+
 
 #endif  // TS_LNAG_H_
