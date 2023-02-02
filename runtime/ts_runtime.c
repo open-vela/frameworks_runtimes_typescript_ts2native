@@ -32,7 +32,9 @@ static ts_object_t* _new_object(ts_gc_t* gc, ts_vtable_env_t* env_vt, ts_argumen
 }
 
 static void _delete_object(ts_gc_t* gc, ts_object_t* obj) {
-  ts_gc_free(gc, obj);
+  //remove the pointer to origin address if has interfaces
+  void* orignaddr = TS_OFFSET(ts_object_t, obj, -sizeof(ts_interface_t) * (obj->vtable_env->vtable->interfaces_count));
+  ts_gc_free(gc, orignaddr);
 }
 
 ts_runtime_t* ts_runtime_create(int argc, const char* argv[]) {
