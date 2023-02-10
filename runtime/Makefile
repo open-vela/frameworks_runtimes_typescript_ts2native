@@ -1,3 +1,5 @@
+#BUILD_32BIT=-m32
+
 test_modules= \
   test_hello             \
   test_class1            \
@@ -26,11 +28,13 @@ runtime_objs =          \
     ts_std_console.o    \
     ts_std_timer.o      \
     ts_std_promise.o    \
-    ts_exception.o
+    ts_exception.o      \
+    ts_package.o
 
-RT_LDFLAGS =
+RT_LDFLAGS =$(BUILD_32BIT)
 
-RT_CFLAGS = -I. -g
+
+RT_CFLAGS = $(BUILD_32BIT) -I. -g
 
 tsshell: $(runtime_objs)
 	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl
