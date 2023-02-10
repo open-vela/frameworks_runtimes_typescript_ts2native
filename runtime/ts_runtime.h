@@ -211,6 +211,7 @@ struct _ts_object_t {
 // ts_module
 struct _ts_module_t {
   ts_object_t base;
+  void* package;
   ts_runtime_t *runtime;
   ts_module_t** imports;
   ts_value_t*  values;
@@ -228,10 +229,21 @@ struct _ts_module_t {
    sizeof(ts_vtable_env_t)*(classes)) + \
    sizeof(ts_interface_meta_t*)*(interfaces)
 
+typedef enum _ts_module_package_type_t {
+  ts_module_no_package,
+  ts_module_dynamic_library,
+  ts_module_package
+} ts_module_package_type_t;
+
 typedef enum _ts_module_method_index_t {
   ts_module_initialize_index = ts_method_last,
 } ts_module_method_index_t;
 
+static inline ts_module_package_type_t ts_module_package_type(ts_module_t* m) {
+  return !m || !m->package ? ts_module_no_package
+	  : ((((uintptr_t)m->package) & 1) == 1 
+			  ? ts_module_package : ts_module_dynamic_library);
+}
 
 ///////////////////////////////////
 // ts_function
@@ -364,6 +376,8 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
 
   ts_init_vtable_env(&m->_self_env, vt, m, NULL);
   m->base.vtable_env = &m->_self_env;
+
+  m->package = NULL;
 
   m->imports = TS_OFFSET(ts_module_t*, m, sizeof(ts_module_t));
   m->values =  TS_OFFSET(ts_value_t, m->imports, sizeof(ts_module_t*) * imports);
