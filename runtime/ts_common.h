@@ -15,6 +15,8 @@
 
 #define TS_OFFSET(T, p, offset) ((T*)((uint8_t*)(p) + (offset)))
 
+#define TS_EXPORT
+
 ////////// configs
 #ifndef TS_STR_FORMAT_SIZE
 #define TS_STR_FORMAT_SIZE  4096

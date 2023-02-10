@@ -14,11 +14,13 @@ TS_CPP_BEGIN
   assert(__ret); \
 } while(0)
 
-#define ts_debug_log(format, ...) fprintf(stderr, format, #__VA_ARGS__)
+#define ts_debug_log(format, ...) fprintf(stderr, format, ##__VA_ARGS__)
 #else
 #define ts_debug_check
 #define ts_debug_log
 #endif
+
+#define ts_error_log(format, ...) fprintf(stderr, format, ##__VA_ARGS__)
 
 TS_CPP_END
 
