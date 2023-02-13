@@ -43,6 +43,7 @@ export class NativeWriter implements p.PackageWriter {
     this.fdSource = fs.openSync(file_path, "w");
     this.sourcePath = file_path;
     // add the header
+    this.addSource("#define TS_NO_STD_LIBC\n");
     this.addSource("#include <ts_runtime.h>\n");
     this.addSource("#include <ts_lang.h>\n");
     this.addSource("#include <ts_std.h>\n");
@@ -62,6 +63,9 @@ export class NativeWriter implements p.PackageWriter {
     let command = "cc";
     let args = [
 	 "-Iruntime",
+	 //"-O3",
+	 "-DNODEBUG",
+	 "-fno-stack-protector",
 	 "-o",
 	 outObject,
 	 "-c",

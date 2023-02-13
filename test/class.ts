@@ -5,3 +5,6 @@ class Foo {
   }
   say() { console.log("foo") }
 }
+
+let foo = new Foo(100);
+foo.say();
