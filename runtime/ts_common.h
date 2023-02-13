@@ -22,4 +22,17 @@
 #define TS_STR_FORMAT_SIZE  4096
 #endif
 
+////////////////
+#ifdef TS_NO_STD_LIBC
+#include <stdint.h>
+#include <stddef.h>
+static size_t strlen(const char* s) {
+  if (s == NULL) return 0;
+  size_t n = 0;
+  while(s[n]) ++n;
+  return n;
+}
+
+#endif
+
 #endif  // TS_COMMON_H_

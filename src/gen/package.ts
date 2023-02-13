@@ -1,5 +1,9 @@
+/// <reference types="node" />
+
 import * as ts from "typescript";
 import * as s from '../semantics/node';
+
+const path = require('path');
 
 export type int8_t = number;
 export type int16_t = number;
@@ -74,6 +78,25 @@ function Write24(view: DataView, pos: offset_t, size: offset_t) {
   }
 }
 
+function GetNodeData(node: ts.Node) : any | undefined {
+  let v = node as unknown as any;
+  return v.__data;
+}
+
+function GetNodeDataIndex(node: ts.Node) : offset_t {
+  const d = GetNodeData(node);
+  return d ? d.index : 0;
+}
+
+function SetNodeData(node: ts.Node, data: any) {
+  let v = node as unknown as any;
+  if (v.__data == undefined) {
+    v.__data = data;
+  } else {
+    Object.assign(v.__data, data);
+  }
+}
+
 export interface ExecuteCodeSymbol {
   symbol: string;
   address: offset_t;
@@ -96,7 +119,10 @@ export interface PackageWriter {
   readSymbolList(perfix: string) : Promise<ExecuteCodeSymbols|string>;
 }
 
-
+export function normalize_name(name: string) : string {
+  let ret = path.parse(name);
+  return ret.name;
+}
 
 class ObjectBase {
   size: int32_t;
@@ -112,10 +138,12 @@ export class Member {
   name: string;
   impl_name: string;
   offset: offset_t;
+  node: s.Node;
 
-  constructor(kind: MemberType, name: string) {
+  constructor(kind: MemberType, name: string, node: s.Node) {
     this.kind = kind;
     this.name = name;
+    this.node = node;
     this.offset = 0;
   }
 }
@@ -143,6 +171,45 @@ export class InterfaceEntry extends ObjectBase {
   }
 }
 
+export class ConstPool {
+  buffer: ArrayBuffer;
+  view: DataView;
+  current: number;
+  maps: Map<string, offset_t>;
+
+  constructor(size: number) {
+    this.buffer = new ArrayBuffer(size);
+    this.view = new DataView(this.buffer);
+    this.maps = new Map();
+    this.current = 0;
+  }
+
+  pushStringUTF8(str: string) : offset_t {
+    if(this.maps.has(str)) {
+      return this.maps.get(str);
+    }
+
+    this.align(4);
+    let pos = this.current;
+    for (let i = 0; i < str.length; i ++) {
+      this.view.setUint8(this.current++, str.charCodeAt(i));
+    }
+    this.maps.set(str, pos);
+    return pos;
+  }
+
+  align(size: int32_t) {
+    while((this.current % size) != 0) {
+      this.view.setUint8(this.current ++, 0);
+    }
+  }
+
+  getSize() : int32_t {
+    this.align(8);
+    return this.current;
+  }
+}
+
 export class VTable extends ObjectBase {
   class_interface: InterfaceEntry;
   object_name: offset_t            = 0; // the offset of const pool
@@ -162,13 +229,19 @@ export class VTable extends ObjectBase {
   members: Member[] = [];
 
   name: string;
+  clazz: s.Class;
 
-  constructor(name: string) {
+  owner: Package;
+
+  constructor(clazz: s.Class, owner: Package) {
     super();
-    this.name = name;
+    this.owner = owner;
+    this.name = normalize_name(clazz.name);
+    this.clazz = clazz;
     this.object_size = PTR_SIZE;
     this.class_interface = new InterfaceEntry();
     this.size = 0;
+    this.updateMembers();
   }
 
   calcSize() : int32_t {
@@ -186,6 +259,17 @@ export class VTable extends ObjectBase {
     return this.size;
   }
 
+  updateMembers() {
+    if (this.clazz.methods) {
+     for (const m of this.clazz.methods) {
+       if (m.kind == s.NodeType.kMethod) {
+         this.addMember(new Member(MemberType.kMethod,
+                        m.name, m));
+       }
+     }
+    }
+  }
+
   addMember(member: Member) {
     member.impl_name = `${TS_IMPL_PREFIX}${this.name}_${member.name}`;
     this.members.push(member);
@@ -194,16 +278,20 @@ export class VTable extends ObjectBase {
 
   writeSource(writer: PackageWriter) {
     for (const m of this.members) {
-      writer.addSource(
-`static int ${m.impl_name} (ts_object_t* self, ts_argument_t args, ts_return_t ret) {
-
+      if (m.kind == MemberType.kMethod) {
+        writer.addSource(
+`int ${m.impl_name} (ts_object_t* self, ts_argument_t args, ts_return_t ret) {
 `);
 
-      writer.addSource(
+        let context: MethodContext = new MethodContext(this, m);
+	context.writeSource(writer);
+
+        writer.addSource(
 `  // TODO
   return 0;
 }`
-      );
+        );
+      }
     }
   }
 
@@ -269,56 +357,22 @@ export class VTable extends ObjectBase {
     printer(`${prefix}  ==== members: ===`);
     for (const m of this.members) {
       printer(`${prefix}    kind: ${MemberType[m.kind]}`);
-      printer(`${prefix}    name: ${m.name}`);
+      printer(`${prefix}    name: ${m.name} (${m.impl_name})`);
       printer(`${prefix}    offset: ${m.offset}`);
       printer("");
     }
   }
 }
 
-export class ConstPool {
-  buffer: ArrayBuffer;
-  view: DataView;
-  current: number;
-
-  constructor(size: number) {
-    this.buffer = new ArrayBuffer(size);
-    this.view = new DataView(this.buffer);
-    this.current = 0;
-  }
-
-  pushStringUTF8(str: string) : offset_t {
-   this.align(4);
-   let pos = this.current;
-   for (let i = 0; i < str.length; i ++) {
-     this.view.setUint8(this.current++, str.charCodeAt(i));
-   }
-   return pos;
-  }
-
-  align(size: int32_t) {
-    while((this.current % size) != 0) {
-      this.view.setUint8(this.current ++, 0);
-    }
-  }
-
-  getSize() : int32_t {
-    this.align(8);
-    return this.current;
-  }
-}
-
 export class Module extends VTable {
-  intialize: offset_t;
-
-  module: s.Module;
-  
-  constructor(module: s.Module) {
-    super('__ts_module');
-    this.module = module;
+  constructor(module: s.Module, owner: Package) {
+    super(module, owner);
     this.base_type = ts_object_base_type_t.ts_object_module;
     this.size = super.size + OFFSET_SIZE;
-    this.addMember(new Member(MemberType.kMethod, 'initialize'));
+  }
+
+  get module() : s.Module {
+    return this.clazz as s.Module;
   }
 
   calcObjectSize() {
@@ -355,9 +409,28 @@ export class Package {
     this.fileName = module.name;
 
     this.pool = new ConstPool(1024*100);
-    this.module = new Module(module);
+    this.module = new Module(module, this);
     this.module.object_name = this.pool.pushStringUTF8(module.name);
     this.vtables = [];
+
+    this.processSourceFile(module.node);
+    this.updateSize(); // calc the size except executed code
+  }
+
+  processSourceFile(sourceFile: ts.SourceFile) {
+    ts.forEachChild(sourceFile, (node) => this.processNode(node));
+  }
+
+  processNode(node: ts.Node) {
+    switch(node.kind) {
+      case ts.SyntaxKind.StringLiteral:
+        // add the string
+	SetNodeData(node, {index: this.pool.pushStringUTF8(
+		(node as ts.StringLiteral).text)});
+	break;
+    }
+
+    ts.forEachChild(node, (node) => this.processNode(node));
   }
 
   async makeExecute(writer: PackageWriter) {
@@ -376,7 +449,9 @@ export class Package {
 
   calcVTablesSize() : int32_t {
     let size = this.module.calcSize();
+    this.module.offset = this.size;
     for (const v of this.vtables) {
+      v.offset = size;
       size += v.calcSize();
     }
     return size;
@@ -389,7 +464,8 @@ export class Package {
     this.pool_offset = this.size;
     this.size += this.pool.getSize();
     this.text_offset = this.size;
-    this.size += this.executeCode.length;
+    if (this.executeCode)
+      this.size += this.executeCode.length;
   }
 
   writeSource(writer: PackageWriter) {
@@ -466,3 +542,275 @@ export async function writePackage(pkg: Package, writer: PackageWriter) {
   pkg.writePackage(writer);
   pkg.dump(console.log, '');
 }
+
+/////////////////////////////////////////////////////////
+enum ResolverType {
+  kResolverUnknown,
+  kObjectResolver,
+  kPropertyAccessResolver,
+  kCallResolver 
+}
+
+enum ScopeType {
+  kScopeUnknown,
+  kLocalScope,
+  kStdModuleScope,
+  kModuleScope
+}
+
+function ObjectFromScope(type: ScopeType, obj_idx: string) : string {
+  switch(type) {
+    case ScopeType.kLocalScope:
+      return `TS_LOCAL_OBJECT(${obj_idx})`;
+    case ScopeType.kStdModuleScope:
+      return `ts_module_object_of(rt->std_module, ${obj_idx})`;
+    case ScopeType.kModuleScope:
+      return `ts_module_object_of(module, ${obj_idx})`;
+  }
+  return '';
+}
+
+interface Resolver {
+  readonly kind: ResolverType;
+}
+
+interface ObjectResolver extends Resolver {
+  readonly kind: ResolverType.kObjectResolver;
+  scope: ScopeType;
+  object_index: string;
+  vtable?: VTable;
+}
+
+interface PropertyAccessResolver extends Resolver {
+  readonly kind: ResolverType.kPropertyAccessResolver;
+  type: MemberType;
+  index: string;
+}
+
+interface CallResolver extends Resolver {
+  readonly kind: ResolverType.kCallResolver;
+  scope: ScopeType;
+  object_index: string;
+  method_index: string; 
+}
+
+class MethodContext {
+  pkg: Package;
+  self: VTable;
+  member: Member;
+  method: s.MethodDeclaration;
+  blockSource: string;
+  localObjectCount: int32_t;
+  resolvers: Resolver[];
+  prefix: string;
+
+  constructor(self: VTable, m: Member) {
+    this.pkg = self.owner;
+    this.self = self;
+    this.member = m;
+    this.method = m.node as s.MethodDeclaration;
+    this.blockSource = "";
+    this.localObjectCount = 0;
+    this.resolvers = [];
+    this.prefix = "";
+  }
+
+  writeSource(writer: PackageWriter) {
+    this.buildSource(); 
+    
+    writer.addSource(`  ts_module_t* module = ts_module_from_object(self);\n`)
+    writer.addSource(`  ts_runtime_t* rt = module->runtime;\n`)
+    if (this.localObjectCount > 0) {
+      writer.addSource(
+`  TS_PUSH_LOCAL_SCOPE(rt, ${this.localObjectCount});\n`
+      );
+    }
+
+    writer.addSource(this.blockSource);
+    if (this.localObjectCount > 0) {
+      writer.addSource(`  TS_POP_LOCAL_SCOPE(rt);`);
+    }
+  }
+
+  buildSource() {
+    for (const statement of this.method.block.statements) {
+      this.buildNodeSource(statement);
+    } 
+  }
+
+  buildNodeSource(statement: ts.Statement) {
+    switch(statement.kind) {
+      case ts.SyntaxKind.ExpressionStatement:
+        this.buildExpression((statement as ts.ExpressionStatement).expression);
+        break;
+      case ts.SyntaxKind.IfStatement:
+	break;
+      case ts.SyntaxKind.DoStatement:
+	break;
+      case ts.SyntaxKind.WhileStatement:
+        break;
+      case ts.SyntaxKind.ForStatement:
+	break;
+      case ts.SyntaxKind.ForInStatement:
+	break;
+      case ts.SyntaxKind.ForOfStatement:
+	break;
+      case ts.SyntaxKind.ReturnStatement:
+	break;
+      case ts.SyntaxKind.WithStatement:
+	break;
+      case ts.SyntaxKind.SwitchStatement:
+	break;
+      case ts.SyntaxKind.LabeledStatement:
+	break;
+      case ts.SyntaxKind.ThrowStatement:
+	break;
+      case ts.SyntaxKind.TryStatement:
+	break;
+    }
+  }
+
+  buildExpression(expression: ts.Expression) {
+    switch(expression.kind) {
+      case ts.SyntaxKind.CallExpression:
+	this.buildCallExpression((expression as ts.CallExpression));
+        break;
+      case ts.SyntaxKind.PropertyAccessExpression:
+	this.buildPropertyAccessExpression((expression as ts.PropertyAccessExpression));
+        break;
+      case ts.SyntaxKind.Identifier:
+	this.pushResolver(this.resolveIdentifier((expression as ts.Identifier).text));
+        break;
+    }
+  }
+
+  buildPropertyAccessExpression(propexpr: ts.PropertyAccessExpression) {
+    this.buildExpression(propexpr.expression);
+    if (propexpr.questionDotToken) {
+      // TODO
+    }
+
+    let member = this.resolveMember(propexpr.name.text);
+    this.pushAndMergeResolver(member);
+  }
+
+  resolveIdentifier(name: string) : Resolver {
+    // TODO
+    if (name == 'console') {
+      return <ObjectResolver> {
+        kind: ResolverType.kObjectResolver,
+        scope: ScopeType.kStdModuleScope,
+        object_index: "ts_std_console_index",	
+        // vtable: TODO
+      };
+    }
+
+    return { kind: ResolverType.kResolverUnknown };
+  }
+
+  resolveMember(name: string) : Resolver {
+    // TODO
+    if (name == 'log') {
+      return <PropertyAccessResolver> {
+	      kind: ResolverType.kPropertyAccessResolver,
+	      type: MemberType.kMethod,
+	      index: "(ts_method_last + 1)"
+      };
+    }
+    return { kind: ResolverType.kResolverUnknown };
+  }
+
+  pushResolver(resolver: Resolver) {
+    if (resolver.kind == ResolverType.kResolverUnknown) {
+       // TODO
+       console.error("unknown resolver");
+       return;
+    }
+    this.resolvers.push(resolver);
+  }
+
+  pushAndMergeResolver(resolver: Resolver) {
+    const len = this.resolvers.length;
+    if (len >= 2) {
+      if (this.resolvers[len - 2].kind == ResolverType.kCallResolver) {
+        if (this.resolvers[len -1].kind == ResolverType.kObjectResolver
+	    && resolver.kind == ResolverType.kPropertyAccessResolver
+            && (resolver as PropertyAccessResolver).type == MemberType.kMethod) {
+	  const obj = this.resolvers.pop() as ObjectResolver;
+	  const call = this.resolvers[len - 2] as CallResolver;
+	  call.scope = obj.scope;
+	  call.object_index = obj.object_index;
+	  call.method_index = (resolver as PropertyAccessResolver).index;
+	  return;
+	}
+      }
+    }
+ 
+    this.pushResolver(resolver);
+  }
+
+  buildCallExpression(callexpr: ts.CallExpression) {
+    this.pushResolver(<CallResolver> {
+      kind: ResolverType.kCallResolver,
+      scope: ScopeType.kScopeUnknown,
+      object_index: "-1",
+      method_index: "ts_function_call_index"
+    });
+    this.buildExpression(callexpr.expression);
+    const resolver = this.resolvers.pop();
+    if (!resolver || resolver.kind != ResolverType.kCallResolver) {
+      // TODO Error
+      return;
+    }
+
+    let param_deep = this.resolvers.length;
+
+    this.addSource(`  ${this.prefix}do {\n`);
+
+    if (callexpr.questionDotToken) {
+      // TODO
+    }
+    if (callexpr.typeArguments) {
+      // TODO
+    }
+
+    this.addSource(`  ${this.prefix}  ts_value_t __return${param_deep};`);
+    this.addSource(`    ${this.prefix}ts_value_t __arguments${param_deep}[${callexpr.arguments.length + 1}];\n`);
+    this.addSource(`    ${this.prefix}__arguments${param_deep}[0].lval = ${callexpr.arguments.length} & 0xff;\n`);
+    for (let i = 0; i < callexpr.arguments.length; i ++) {
+      // TODO
+      this.makeCallParam(`__arguments${param_deep}[${i+1}]`, callexpr.arguments[i]);
+    }
+
+    //callexpr.arguments
+    const call_resolver = resolver as CallResolver;
+    let object_module : string = ObjectFromScope(call_resolver.scope, call_resolver.object_index)
+    this.addSource(
+`    ${this.prefix}ts_method_call(
+	${this.prefix}${object_module},
+	${this.prefix}${call_resolver.method_index},
+	${this.prefix}__arguments${param_deep},
+	${this.prefix}&__return${param_deep});
+
+`
+        );
+    this.addSource(`  ${this.prefix}}while(0);\n`);
+  }
+
+  makeCallParam(outname: string, arg: ts.Expression) {
+    switch(arg.kind) {
+      case ts.SyntaxKind.StringLiteral:
+	this.addSource(
+`    ${this.prefix}${outname}.object = (ts_object_t*)(TS_STRING_NEW_STACK(rt, TS_OFFSET(const char, OBJECT_VTABLE(self), ${this.pkg.pool_offset} + ${GetNodeDataIndex(arg)} - ${this.self.offset})));
+`
+          );
+        break;
+      // TODO
+    }
+  }
+
+  addSource(s: string) {
+    this.blockSource = this.blockSource + s;
+  }
+}
+
