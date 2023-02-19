@@ -2,6 +2,7 @@
 
 import * as ts from "typescript";
 import * as s from '../semantics/node';
+import {loadStandareLibrary} from '../semantics/std';
 
 const path = require('path');
 
@@ -137,14 +138,44 @@ export class Member {
   readonly kind: MemberType;
   name: string;
   impl_name: string;
+  index: string;
   offset: offset_t;
   node: s.Node;
 
-  constructor(kind: MemberType, name: string, node: s.Node) {
+  constructor(kind: MemberType, name: string, node: s.Node, index: string) {
     this.kind = kind;
     this.name = name;
     this.node = node;
     this.offset = 0;
+    this.index = index;
+  }
+}
+
+enum VariableType {
+  kUnknown,
+  kPrimitiveTypeBegin,
+  kInt = kPrimitiveTypeBegin,
+  kUInt,
+  kInt64,
+  kUInt64,
+  kBoolean,
+  kFloat,
+  kDouble,
+  kNumber = kDouble,
+  kVoid,
+  kPrimitiveTypeEnd,
+  kObject,
+}
+
+export class Variable {
+  readonly kind: VariableType;
+  value: s.Variable;
+  type?: VTable; 
+
+  constructor(kind: VariableType, v: s.Variable, type?: VTable) {
+    this.kind = kind;
+    this.value = v;
+    this.type = type;
   }
 }
 
@@ -231,9 +262,9 @@ export class VTable extends ObjectBase {
   name: string;
   clazz: s.Class;
 
-  owner: Package;
+  owner?: Package;
 
-  constructor(clazz: s.Class, owner: Package) {
+  constructor(clazz: s.Class, owner?: Package) {
     super();
     this.owner = owner;
     this.name = normalize_name(clazz.name);
@@ -261,10 +292,11 @@ export class VTable extends ObjectBase {
 
   updateMembers() {
     if (this.clazz.methods) {
+     let i : int32_t = 0;
      for (const m of this.clazz.methods) {
        if (m.kind == s.NodeType.kMethod) {
          this.addMember(new Member(MemberType.kMethod,
-                        m.name, m));
+                        m.name, m, (i++) + ''));
        }
      }
     }
@@ -341,7 +373,7 @@ export class VTable extends ObjectBase {
   }
 
   dump(printer: { (...args: any[]) : void}, prefix: string) {
-    printer(`${prefix}object vtable: ${this.name} (pool offset: ${this.object_name})`);
+    printer(`${prefix}object vtable: ${this.name}@${this.offset} (pool offset: ${this.object_name})`);
     this.class_interface.dump(printer, prefix + '  ');
     printer(`${prefix}  object_size: ${this.object_size}`);
     printer(`${prefix}  interfaces_count: ${this.interfaces_count}`);
@@ -359,16 +391,84 @@ export class VTable extends ObjectBase {
       printer(`${prefix}    kind: ${MemberType[m.kind]}`);
       printer(`${prefix}    name: ${m.name} (${m.impl_name})`);
       printer(`${prefix}    offset: ${m.offset}`);
+      printer(`${prefix}    index: ${m.index}`);
       printer("");
     }
   }
+
+  ////////////////////////////////////
+  resolve(name: string) : Resolver | undefined {
+    let i = 0;
+    if (name == "contructor") {
+      // TODO gen constructor 
+      // return MemberResolver(ctr, "ts_method_constructor");
+    } else if (name == "__finalize") {
+      // TODO  ts_method_destroy
+    } else if (name == "__gc_visitor") {
+      // TODO ts_method_gc_visit
+    } else if (name == "toString") {
+      // TODO ts_method_to_string
+    } else {
+      for (const m of this.members) {
+        if (m.name == name) {
+          return new MemberResolver(m, "ts_method_last + " + i);
+        }
+        i ++;
+      }
+    }
+    return undefined;
+  }
 }
 
+
+
 export class Module extends VTable {
-  constructor(module: s.Module, owner: Package) {
+  vtables: VTable[];
+  vars: Variable[];
+
+  is_std: boolean = false;
+
+  constructor(module: s.Module, owner?: Package) {
     super(module, owner);
     this.base_type = ts_object_base_type_t.ts_object_module;
     this.size = super.size + OFFSET_SIZE;
+
+    this.vtables = [];
+    if (module.classes) {
+      for (const c of module.classes) {
+        this.vtables.push(new VTable(c, owner));
+      }
+    }
+
+    this.vars = [];
+    if (module.vars) {
+      for (const v of module.vars) {
+        this.vars.push(this.createVariable(v));
+      }
+    }
+  }
+
+  createVariable(v : s.Variable) : Variable {
+    let kind : VariableType = VariableType.kUnknown;
+    let vtable: VTable | undefined = undefined;
+    if (v.node) {
+      switch(v.node.kind) {
+        case ts.SyntaxKind.TypeReference: {
+	    kind = VariableType.kObject;
+	    const ref = v.node as ts.TypeReferenceNode;
+	    if (ref.typeName.kind == ts.SyntaxKind.Identifier) {
+  	      vtable = this.findVTable((ref.typeName as ts.Identifier).text);
+	    } else if (ref.typeName.kind == ts.SyntaxKind.QualifiedName) {
+	      // TODO
+	    }
+	  }
+	  break;
+	default:
+	  break;
+      }
+    }
+
+    return new Variable(kind, v, vtable);
   }
 
   get module() : s.Module {
@@ -386,6 +486,66 @@ export class Module extends VTable {
 	  + PTR_SIZE // interfaces;
 	  + PTR_SIZE * 5; // sizeof(ts_vtable_env_t)
   }
+
+  calcSize() : int32_t {
+    let size = super.calcSize();
+    this.size = size;
+    for (const v of this.vtables) {
+      v.offset = size;
+      size += v.calcSize();
+    }
+    return size;
+  }
+
+  writeSource(writer: PackageWriter) {
+    super.writeSource(writer);
+    for (const v of this.vtables) {
+      v.writeSource(writer);
+    }
+  }
+
+  dump(printer: { (...args: any[]): void}, prefix: string) {
+    super.dump(printer, prefix);
+
+    for (const v of this.vtables) {
+      v.dump(printer, prefix + '  ');
+    }
+  }
+
+  findVTable(name: string) : VTable | undefined {
+    for (const c of this.vtables) {
+      if (c.name == name) {
+	return c;
+      }
+    }
+    return undefined;
+  }
+
+  //////////////////////////////////////////////
+  resolve(name: string) : Resolver | undefined {
+    // resolve as class
+
+    let i = 0;
+    for (const c of this.vtables) {
+      if (c.name == name) {
+        return new ClassResolver(i+"", c, this);
+      }
+      i ++;
+    }
+
+    // resolve the module object
+    i = 0;
+    for (const v of this.vars) {
+      if (v.value.name == name) {
+        return new ObjectResolver(
+		this.is_std ? ScopeType.kStdModuleScope : ScopeType.kModuleScope,
+		i + "", v.type);
+      }
+      i ++;
+    }
+
+    return undefined;
+  }
 }
 
 export class Package {
@@ -396,22 +556,22 @@ export class Package {
 
   pool: ConstPool;
   module: Module;
-  vtables: VTable[];
   executeCode?: Uint8Array;
   executeCodeSymbols?: ExecuteCodeSymbols;
 
   fileName: string;
+  stdModule: Module;
 
   constructor(module: s.Module) {
     this.magic = 77 + (86 << 8)  + (84 << 16) + (80 << 24); // 'MVTP'
     this.size = 8; // header size
 
     this.fileName = module.name;
+    this.stdModule = GetStdModule();
 
     this.pool = new ConstPool(1024*100);
     this.module = new Module(module, this);
     this.module.object_name = this.pool.pushStringUTF8(module.name);
-    this.vtables = [];
 
     this.processSourceFile(module.node);
     this.updateSize(); // calc the size except executed code
@@ -447,19 +607,10 @@ export class Package {
     }
   }
 
-  calcVTablesSize() : int32_t {
-    let size = this.module.calcSize();
-    this.module.offset = this.size;
-    for (const v of this.vtables) {
-      v.offset = size;
-      size += v.calcSize();
-    }
-    return size;
-  }
-
   updateSize() {
     this.size = 8;
-    let vtables_size = this.calcVTablesSize();
+    this.module.offset = this.size;
+    let vtables_size = this.module.calcSize();
     this.size += (vtables_size + 3) & ~3;
     this.pool_offset = this.size;
     this.size += this.pool.getSize();
@@ -470,9 +621,6 @@ export class Package {
 
   writeSource(writer: PackageWriter) {
     this.module.writeSource(writer);
-    for (const v of this.vtables) {
-      v.writeSource(writer);
-    }
   }
 
   writePackage(writer: PackageWriter) {
@@ -490,9 +638,6 @@ export class Package {
     printer(`${prefix}pool_offset: ${this.pool_offset}`);
     printer(`${prefix}text_offset: ${this.text_offset}`);
     this.module.dump(printer, prefix + '  ');
-    for (const v of this.vtables) {
-      v.dump(printer, prefix + '  ');
-    }
     printer(`${prefix}<<<<<<<<<${this.fileName}<<<<<<<<<<<`)
   }
 
@@ -508,7 +653,7 @@ export class Package {
     this.module.updateConstPoolOffset(this.pool_offset);
     this.module.updateExecuteOffset(this.executeCodeSymbols, this.text_offset);
     pos += this.module.write(view, pos);
-    for (const v of this.vtables) {
+    for (const v of this.module.vtables) {
       v.updateConstPoolOffset(this.pool_offset);
       v.updateExecuteOffset(this.executeCodeSymbols, this.text_offset);
       pos += v.write(view, pos);
@@ -526,6 +671,14 @@ export class Package {
 
   writeExecuteCode(writer: PackageWriter) {
     writer.writePackage(this.executeCode, this.executeCode.length);
+  }
+
+
+  //////////////////////////////////////
+  resolve(name: string) : Resolver | undefined {
+    let resolver = this.module.resolve(name);
+    if (resolver) return resolver;
+    return this.stdModule.resolve(name);
   }
 }
 
@@ -545,14 +698,20 @@ export async function writePackage(pkg: Package, writer: PackageWriter) {
 
 /////////////////////////////////////////////////////////
 enum ResolverType {
-  kResolverUnknown,
+  kUnknownResolver,
   kObjectResolver,
+  kFunctionResolver,
+  kClassResolver,
+  kEnumResolver,
+  kMemberResolver,
   kPropertyAccessResolver,
   kCallResolver 
 }
 
 enum ScopeType {
   kScopeUnknown,
+  kThisScope,
+  kParamterScope,
   kLocalScope,
   kStdModuleScope,
   kModuleScope
@@ -572,13 +731,72 @@ function ObjectFromScope(type: ScopeType, obj_idx: string) : string {
 
 interface Resolver {
   readonly kind: ResolverType;
+  parent?: Resolver;
+  resolve(name: string): Resolver | undefined;
 }
 
-interface ObjectResolver extends Resolver {
+class UnknownResolver implements Resolver {
+  readonly kind: ResolverType.kUnknownResolver;
+  resolve(name: string): Resolver | undefined {
+    return undefined;
+  }
+
+  constructor() {
+    this.kind = ResolverType.kUnknownResolver;
+  }
+}
+
+class ObjectResolver implements Resolver {
   readonly kind: ResolverType.kObjectResolver;
   scope: ScopeType;
   object_index: string;
   vtable?: VTable;
+
+  constructor(scope: ScopeType, object_index: string, vtable?: VTable) {
+    this.kind = ResolverType.kObjectResolver;
+    this.scope = scope;
+    this.object_index = object_index;
+    this.vtable = vtable;
+  }
+
+  resolve(name: string): Resolver | undefined {
+    if (this.vtable) return this.vtable.resolve(name);
+    return undefined;
+  }
+}
+
+class ClassResolver implements Resolver {
+  readonly kind: ResolverType.kClassResolver;
+  object_index: string;
+  vtable: VTable;
+  own: Module;
+
+  constructor(object_index: string, vtable: VTable, own: Module) {
+    this.object_index = object_index;
+    this.vtable = vtable;
+    this.own = own;
+  }
+
+  resolve(name: string) : Resolver | undefined {
+    // TODO read static member of class
+    return undefined;
+  }
+}
+
+class MemberResolver implements Resolver {
+  readonly kind: ResolverType.kMemberResolver;
+  member: Member;
+  index: string;
+
+  constructor(m: Member, idx: string) {
+    this.kind = ResolverType.kMemberResolver;
+    this.member = m;
+    this.index = idx;
+  }
+
+  resolve(name: string) : Resolver | undefined {
+    return undefined;
+  }
 }
 
 interface PropertyAccessResolver extends Resolver {
@@ -594,6 +812,34 @@ interface CallResolver extends Resolver {
   method_index: string; 
 }
 
+class FunctionResolver implements Resolver {
+  readonly kind: ResolverType.kFunctionResolver;
+  this_vtable: VTable;
+  pkg: Package;
+  //arguments: 
+  //local_vars
+
+  constructor(thiz_vt: VTable, pkg: Package/*, arguments*/) {
+    this.kind = ResolverType.kFunctionResolver;
+    this.this_vtable = thiz_vt;
+    this.pkg = pkg;
+  }
+
+  resolve(name: string): Resolver | undefined {
+    if (name == "this") {
+      return new ObjectResolver(ScopeType.kThisScope, "self", this.this_vtable);
+    }
+    // if (arguments) { // find in arguments
+    // }
+    // if (local_vars) { // find in local_vars
+    // }
+
+    // find in pkg
+    return this.pkg.resolve(name);
+  }
+}
+
+
 class MethodContext {
   pkg: Package;
   self: VTable;
@@ -602,7 +848,9 @@ class MethodContext {
   blockSource: string;
   localObjectCount: int32_t;
   resolvers: Resolver[];
+  rootResover: FunctionResolver;
   prefix: string;
+  call_deep: int32_t = 0;
 
   constructor(self: VTable, m: Member) {
     this.pkg = self.owner;
@@ -611,8 +859,13 @@ class MethodContext {
     this.method = m.node as s.MethodDeclaration;
     this.blockSource = "";
     this.localObjectCount = 0;
-    this.resolvers = [];
+    this.rootResover = new FunctionResolver(self, this.pkg);
+    this.resolvers = [this.rootResover];
     this.prefix = "";
+  }
+
+  topResolver() : Resolver {
+    return this.resolvers[this.resolvers.length - 1];
   }
 
   writeSource(writer: PackageWriter) {
@@ -679,7 +932,7 @@ class MethodContext {
 	this.buildPropertyAccessExpression((expression as ts.PropertyAccessExpression));
         break;
       case ts.SyntaxKind.Identifier:
-	this.pushResolver(this.resolveIdentifier((expression as ts.Identifier).text));
+	this.resolveIdentifier((expression as ts.Identifier).text);
         break;
     }
   }
@@ -690,38 +943,32 @@ class MethodContext {
       // TODO
     }
 
-    let member = this.resolveMember(propexpr.name.text);
-    this.pushAndMergeResolver(member);
+    this.resolveMember(propexpr.name.text);
   }
 
-  resolveIdentifier(name: string) : Resolver {
-    // TODO
-    if (name == 'console') {
-      return <ObjectResolver> {
-        kind: ResolverType.kObjectResolver,
-        scope: ScopeType.kStdModuleScope,
-        object_index: "ts_std_console_index",	
-        // vtable: TODO
-      };
+  resolveIdentifier(name: string) {
+    console.log(`=== ${ResolverType[this.topResolver().kind]}`);
+    let resolver = this.topResolver().resolve(name); 
+    if (!resolver) {
+      console.log(`==== error! cannot resolve the name: "${name}"`);
+      return;
     }
 
-    return { kind: ResolverType.kResolverUnknown };
+    this.pushResolver(resolver);
   }
 
-  resolveMember(name: string) : Resolver {
-    // TODO
-    if (name == 'log') {
-      return <PropertyAccessResolver> {
-	      kind: ResolverType.kPropertyAccessResolver,
-	      type: MemberType.kMethod,
-	      index: "(ts_method_last + 1)"
-      };
+  resolveMember(name: string) {
+    let resolver = this.topResolver().resolve(name);
+    if (!resolver) {
+      // TODO ERROR
+      return; 
     }
-    return { kind: ResolverType.kResolverUnknown };
+
+    this.pushResolver(resolver);
   }
 
   pushResolver(resolver: Resolver) {
-    if (resolver.kind == ResolverType.kResolverUnknown) {
+    if (resolver.kind == ResolverType.kUnknownResolver) {
        // TODO
        console.error("unknown resolver");
        return;
@@ -750,20 +997,14 @@ class MethodContext {
   }
 
   buildCallExpression(callexpr: ts.CallExpression) {
-    this.pushResolver(<CallResolver> {
-      kind: ResolverType.kCallResolver,
-      scope: ScopeType.kScopeUnknown,
-      object_index: "-1",
-      method_index: "ts_function_call_index"
-    });
     this.buildExpression(callexpr.expression);
     const resolver = this.resolvers.pop();
-    if (!resolver || resolver.kind != ResolverType.kCallResolver) {
+    if (!resolver) {
       // TODO Error
       return;
     }
 
-    let param_deep = this.resolvers.length;
+    let param_deep = this.call_deep ++;
 
     this.addSource(`  ${this.prefix}do {\n`);
 
@@ -783,18 +1024,29 @@ class MethodContext {
     }
 
     //callexpr.arguments
-    const call_resolver = resolver as CallResolver;
-    let object_module : string = ObjectFromScope(call_resolver.scope, call_resolver.object_index)
-    this.addSource(
+    if (resolver.kind == ResolverType.kMemberResolver) {
+      const member_resolver = resolver as MemberResolver;
+      const object_resolver = this.resolvers.pop() as ObjectResolver;
+      let object_module : string = ObjectFromScope(object_resolver.scope, object_resolver.object_index)
+      this.addSource(
 `    ${this.prefix}ts_method_call(
 	${this.prefix}${object_module},
-	${this.prefix}${call_resolver.method_index},
+	${this.prefix}${member_resolver.index},
 	${this.prefix}__arguments${param_deep},
 	${this.prefix}&__return${param_deep});
 
 `
         );
+    } else if (resolver.kind == ResolverType.kObjectResolver) {
+      const object_resolver = resolver as ObjectResolver;
+      const object_module : string = ObjectFromScope(object_resolver.scope, object_resolver.object_index);
+      this.addSource(
+`    ${this.prefix}ts_function_call(${object_module}, __arguments${param_deep}, &__return${param_deep});
+`
+        );
+    }
     this.addSource(`  ${this.prefix}}while(0);\n`);
+    this.call_deep --;
   }
 
   makeCallParam(outname: string, arg: ts.Expression) {
@@ -813,4 +1065,22 @@ class MethodContext {
     this.blockSource = this.blockSource + s;
   }
 }
+
+////////////////////////////////////////////////////////
+// std module
+let std_module : Module | undefined;
+
+function GetStdModule() : Module {
+  if (std_module) return std_module;
+
+  const std_file =  path.join(__dirname, "../../lib/std.d.ts");
+
+  std_module = new Module(loadStandareLibrary(std_file));
+  std_module.is_std = true;
+  console.log("=============== standare library ==============");
+  std_module.dump(console.log, '');
+  console.log("===============================================");
+  return std_module;
+}
+
 

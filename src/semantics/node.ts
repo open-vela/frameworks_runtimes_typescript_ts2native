@@ -4,6 +4,7 @@ import * as ts from "typescript";
 export enum NodeType {
   kUnkown,
   kBlockStatement,
+  kVariable,
   kFunction,
   kMethod,
   kClass,
@@ -23,8 +24,8 @@ export interface BlockStatement extends Node {
 export interface MethodDeclaration extends Node {
   readonly kind: NodeType.kMethod;
   readonly name: string;
-  returnType?: ts.Node;
-  parameters?: ts.Node[];
+  returnType?: ts.TypeNode;
+  parameters?: ts.NodeArray<ts.ParameterDeclaration>;
   block?: BlockStatement;
 }
 
@@ -34,8 +35,16 @@ export interface Class extends Node {
   methods?: MethodDeclaration[];
 }
 
+export interface Variable extends Node {
+  readonly kind: NodeType.kVariable;
+  readonly name: string;
+  node?: ts.TypeNode;
+}
+
 export interface Module extends Class {
   readonly kind: NodeType.kModule;
-  node: ts.SourceFile;
+  node?: ts.SourceFile;
+  classes?: Class[];
+  vars?: Variable[];
 }
 

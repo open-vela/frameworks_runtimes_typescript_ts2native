@@ -124,6 +124,8 @@ struct _ts_vtable_t {
   ts_member_t members[N]; \
 } name
 
+#define TS_VTABLE_NEMBER_COUNT(name)   (sizeof(name.members) / sizeof(name.members[0]))
+
 #define TS_VTABLE_INTERFACES_DEF(name, MemberN, IntfN) struct { \
   ts_interface_entry_t interfaces[IntfN]; \
   ts_vtable_t base; \
