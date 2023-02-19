@@ -3,7 +3,7 @@ class Foo {
   constructor(a: number) {
     this.a = a;
   }
-  say() { console.log("foo") }
+  say() { console.log("foo", this.a) }
 }
 
 let foo = new Foo(100);
