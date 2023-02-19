@@ -23,9 +23,9 @@ interface Console {
 }
 */
 
-interface Console {
-  log(...data: any[]): void;
+declare class Console {
   info(...data: any[]): void;
+  log(...data: any[]): void;
   warn(...data: any[]): void;
   error(...data: any[]): void;
 }

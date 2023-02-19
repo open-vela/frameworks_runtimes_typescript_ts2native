@@ -58,7 +58,7 @@ static TS_VTABLE_DEF(_console_vt, 5) = {
     sizeof(ts_std_console_t),
     "console",
     0, // interface count
-    4, // member count,
+    TS_VTABLE_NEMBER_COUNT(_console_vt),
     NULL,  // consructor
     NULL,  // destroy
     NULL,  // to string
