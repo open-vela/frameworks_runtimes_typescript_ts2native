@@ -1,7 +1,7 @@
 import * as ts from "typescript";
 
 import {buildModule} from './semantics/builder';
-import {makePackage, writePackage} from './gen/package';
+import {makePackage, writePackage, PackageWriterMode} from './gen/package';
 import {NativeWriter} from './gen/writer';
 import {compileFiles, nodeToString} from './compiler';
 
@@ -18,7 +18,7 @@ function debugAST(sourceFile: ts.SourceFile) {
 function translateToNativePackage(sourceFile: ts.SourceFile, out_dir: string) {
   let module = buildModule(sourceFile);
   let pkg = makePackage(module);
-  let writer = new NativeWriter(out_dir);
+  let writer = new NativeWriter(out_dir, PackageWriterMode.kSource);
   writePackage(pkg, writer).then(() => {
     console.log(`write package success: ${sourceFile.fileName}`);
   }).catch((e) => {
