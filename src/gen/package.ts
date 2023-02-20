@@ -108,7 +108,12 @@ export interface ExecuteCodeSymbols {
   [key: string] : ExecuteCodeSymbol;
 }
 
+export enum PackageWriterMode {
+  kSource,
+  kBinary
+};
 export interface PackageWriter {
+  readonly mode: PackageWriterMode;
   createPackage(pkgName: string) : void;
   writePackage(buffer: Uint8Array, size: number) : void;
   finishPackage() : void;
@@ -311,17 +316,20 @@ export class VTable extends ObjectBase {
   writeSource(writer: PackageWriter) {
     for (const m of this.members) {
       if (m.kind == MemberType.kMethod) {
+	if (writer.mode == PackageWriterMode.kSource) {
+          writer.addSource('static ');
+	}
         writer.addSource(
 `int ${m.impl_name} (ts_object_t* self, ts_argument_t args, ts_return_t ret) {
 `);
 
-        let context: MethodContext = new MethodContext(this, m);
+        let context: MethodContext = new MethodContext(this, m, writer.mode);
 	context.writeSource(writer);
 
         writer.addSource(
 `  // TODO
   return 0;
-}`
+}\n`
         );
       }
     }
@@ -370,6 +378,41 @@ export class VTable extends ObjectBase {
       }
     }
     return pos - this.offset;
+  }
+
+  writeMembersSource(writer: PackageWriter) {
+    for (const m of this.members) {
+      if (m.kind == MemberType.kField) {
+        writer.addSource(`    {.field = ${m.offset}}, //${m.name}\n`);
+      } else {
+        writer.addSource(`    {.method = (ts_call_t)${m.impl_name}},\n`);
+      }
+    }
+  }
+
+  writeVtableSource(writer: PackageWriter) {
+    writer.addSource(`static TS_VTABLE_DEF(_${this.name}_vt, ${this.member_count}) = {\n`);
+
+    writer.addSource("  TS_VTABLE_SUPER_BASE(\n");
+    writer.addSource(`    ${this.object_size},\n`);
+    writer.addSource(`    &__const_pool[${this.object_name}],\n`);
+    if (this.super) {
+      writer.addSource(`    /*TODO SUPER*/,\n`);
+    } else {
+      writer.addSource(`    NULL,\n`);
+    }
+    writer.addSource(`    ${this.interfaces_count},\n`);
+    writer.addSource(`    ${this.member_count},\n`);
+    writer.addSource(`    NULL/*TODO constructor*/,\n`);
+    writer.addSource(`    NULL/*TODO desctroy*/,\n`);
+    writer.addSource(`    NULL/*TODO to_string*/,\n`);
+    writer.addSource(`    NULL/*TODO gc_visit*/\n`);
+    writer.addSource(`  ),\n`);
+    writer.addSource(`  {\n`);
+    this.writeMembersSource(writer);
+    writer.addSource(`  }\n`);
+
+    writer.addSource("};\n");
   }
 
   dump(printer: { (...args: any[]) : void}, prefix: string) {
@@ -519,6 +562,28 @@ export class Module extends VTable {
       }
     }
     return undefined;
+  }
+
+  writeModuleSource(writer: PackageWriter) {
+    writer.addSource(`static TS_VTABLE_DEF(_${this.name}_vt, ${this.member_count}) = {\n`);
+
+    writer.addSource(`  TS_MODULE_VTABLE_BASE(TS_MODULE_SIZE(`);
+      writer.addSource(`0/*imports*/,`);
+      writer.addSource(`${this.vars.length},`);
+      writer.addSource(`0/*functions*/,`);
+      writer.addSource(`${this.vtables.length},`);
+      writer.addSource(`0/*interfaces*/),`);
+    writer.addSource(`    &__const_pool[${this.object_name}],\n`);
+    writer.addSource(`    0,\n`);
+    writer.addSource(`    1,  //member count\n`);
+    writer.addSource(`    NULL, // constructor\n`);
+    writer.addSource(`    NULL, // destroy\n`);
+    writer.addSource(`    NULL, // to_string\n`);
+    writer.addSource(`    NULL), // gc_visit\n`);
+    writer.addSource(`  {\n`);
+    this.writeMembersSource(writer);
+    writer.addSource(`  }\n`);
+    writer.addSource('};\n');
   }
 
   //////////////////////////////////////////////
@@ -673,6 +738,60 @@ export class Package {
     writer.writePackage(this.executeCode, this.executeCode.length);
   }
 
+  ///////
+  writeConstPoolSource(writer: PackageWriter) {
+    writer.addSource("static unsigned char __const_pool[] = {");
+    let bytes = new Uint8Array(this.pool.buffer);
+    for (let i = 0; i < this.pool.current; i ++) {
+       if (i % 16 == 0) {
+         writer.addSource("\n");
+       }
+       writer.addSource(`0x${bytes[i].toString(16)},`);
+    }
+
+    writer.addSource("\n}; // __const_pool\n");
+  }
+
+  writeVtablesSource(writer: PackageWriter) {
+    for (const v of this.module.vtables) {
+      v.writeVtableSource(writer);
+    } 
+    this.module.writeModuleSource(writer);
+  }
+
+  writeModuleEntrySource(writer: PackageWriter) {
+    writer.addSource(`TS_EXTERN ts_module_t* _${this.module.name}_module(ts_runtime_t* runtime) {\n`);
+    writer.addSource(`  ts_module_t* m = ts_new_module(runtime, &_${this.module.name}_vt.base,`);
+      writer.addSource(`0/*imports*/,`);
+      writer.addSource(`${this.module.vars.length},`);
+      writer.addSource(`0/*functions*/,`);
+      writer.addSource(`${this.module.vtables.length},`);
+      writer.addSource(`0/*interfaces*/`);
+      writer.addSource(");\n");
+
+    let i = 0;
+    for (const v of this.module.vars) {
+      writer.addSource(`  m->values[${i++}].lval = 0;\n`);
+    }
+
+    i = 0;
+    for (const v of this.module.vtables) {
+      writer.addSource(`  ts_init_vtable_env(&m->classes[${i++}], &_${v.name}_vt.base, m, NULL);\n`);
+    }
+
+    // TODO functions
+
+
+    writer.addSource(`  return m;\n}\n`)
+  }
+
+  writePackageAsSource(writer: PackageWriter) {
+    writer.createSourceFile(this.fileName);
+    this.writeConstPoolSource(writer);
+    this.writeSource(writer);
+    this.writeVtablesSource(writer);
+    this.writeModuleEntrySource(writer);
+  }
 
   //////////////////////////////////////
   resolve(name: string) : Resolver | undefined {
@@ -691,8 +810,13 @@ export function makePackage(module: s.Module) : Package {
 }
 
 export async function writePackage(pkg: Package, writer: PackageWriter) {
-  await pkg.makeExecute(writer);
-  pkg.writePackage(writer);
+  if (writer.mode == PackageWriterMode.kSource) {
+    pkg.writePackageAsSource(writer);
+  } else {
+    await pkg.makeExecute(writer);
+    pkg.writePackage(writer);
+  }
+
   pkg.dump(console.log, '');
 }
 
@@ -846,13 +970,15 @@ class MethodContext {
   member: Member;
   method: s.MethodDeclaration;
   blockSource: string;
+  mode: PackageWriterMode;
   localObjectCount: int32_t;
   resolvers: Resolver[];
   rootResover: FunctionResolver;
   prefix: string;
   call_deep: int32_t = 0;
 
-  constructor(self: VTable, m: Member) {
+  constructor(self: VTable, m: Member, mode: PackageWriterMode) {
+    this.mode = mode;
     this.pkg = self.owner;
     this.self = self;
     this.member = m;
@@ -1049,11 +1175,19 @@ class MethodContext {
     this.call_deep --;
   }
 
+  getStringLiteral(str: ts.Node) {
+    if (this.mode == PackageWriterMode.kSource) {
+      return `(const char*) (__const_pool + ${GetNodeDataIndex(str)})`;
+    } else {
+      return `TS_OFFSET(const char, OBJECT_VTABLE(self), ${this.pkg.pool_offset} + ${GetNodeDataIndex(str)} - ${this.self.offset})`;
+    }
+  }
+
   makeCallParam(outname: string, arg: ts.Expression) {
     switch(arg.kind) {
       case ts.SyntaxKind.StringLiteral:
 	this.addSource(
-`    ${this.prefix}${outname}.object = (ts_object_t*)(TS_STRING_NEW_STACK(rt, TS_OFFSET(const char, OBJECT_VTABLE(self), ${this.pkg.pool_offset} + ${GetNodeDataIndex(arg)} - ${this.self.offset})));
+`    ${this.prefix}${outname}.object = (ts_object_t*)(TS_STRING_NEW_STACK(rt, ${this.getStringLiteral(arg)}));
 `
           );
         break;

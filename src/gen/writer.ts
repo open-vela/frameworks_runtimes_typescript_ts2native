@@ -8,12 +8,14 @@ const child_process = require('child_process');
 
 
 export class NativeWriter implements p.PackageWriter {
+  readonly mode : p.PackageWriterMode;
   fdSource: number = 0;
   fdPackage: number = 0;
   sourcePath: string;
   outDir: string;
 
-  constructor(outDir: string) {
+  constructor(outDir: string, mode: p.PackageWriterMode = p.PackageWriterMode.kBinary) {
+    this.mode = mode;
     this.outDir = outDir;
   }
 
