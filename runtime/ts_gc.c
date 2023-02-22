@@ -45,18 +45,17 @@ static uint32_t  _default_slot_sizes[] = {
   CLUSTER_SIZE * 2 / 1024, // 2^12
 };
 #endif
+#define DEFAULT_CLUSTER_COUNT (sizeof(_default_slot_sizes)/sizeof(_default_slot_sizes[0]))
 
 static ts_gc_configure_t _default_gc_configure = {
 #ifndef __LP64__
     .min_slot_size = 32,
     .max_slot_size = 1024,
-    .cluster_count = 5,
 #else
     .min_slot_size = 64,
     .max_slot_size = 4096,
-    .cluster_count = 6,
 #endif
-    .cluster_count = 256,
+    .cluster_count = DEFAULT_CLUSTER_COUNT,
     .def_slot_count = CLUSTER_SIZE / 128,
     .large_table_size = 256,
     .weak_table_size = 256,
@@ -78,7 +77,7 @@ static ts_gc_cluster_entry_t* ts_gc_create_clusters(ts_gc_t* gc, uint32_t min_sl
     entries[i].cluster_index = (uint16_t)i;
     entries[i].slot_count = (uint16_t)
 	    (config_slot_sizes && config_slot_sizes[i] > 0 ?
-	            config->def_slot_count : config_slot_sizes[i]);
+	            config_slot_sizes[i] : config->def_slot_count);
     entries[i].header = NULL;
     slot_size <<= 1;
   }
@@ -91,6 +90,7 @@ ts_gc_t * ts_gc_create(const ts_gc_configure_t* config) {
   }
 
   ts_gc_t* gc = (ts_gc_t*)malloc(sizeof(ts_gc_t));
+  memset(gc, 0, sizeof(ts_gc_t));
   gc->min_slot_size = (uint16_t)config->min_slot_size;
   gc->max_slot_size = (uint16_t)config->max_slot_size;
   gc->cluster_count = (uint16_t)config->cluster_count;
@@ -115,8 +115,9 @@ void ts_gc_destroy(ts_gc_t* gc) {
       ts_gc_cluster_t* cluster = gc->clusters[i].header;
       while (cluster) {
         ts_gc_cluster_t* tmp = cluster;
-	cluster = cluster->next;
-	free(tmp);
+        cluster = cluster->next;
+        free(tmp->buffer);
+        free(tmp);
       } 
     }
     free(gc->clusters);
@@ -226,7 +227,7 @@ static void* ts_gc_alloc_cluster_slot(ts_gc_cluster_t* cluster, size_t size) {
 
 static ts_gc_cluster_t* ts_gc_new_cluster(ts_gc_cluster_entry_t* entry) {
   ts_gc_cluster_t* cluster = (ts_gc_cluster_t*)malloc(sizeof(ts_gc_cluster_t));
-
+  memset(cluster, 0, sizeof(ts_gc_cluster_t));
   cluster->cluster_size = entry->slot_size * entry->slot_count;
   cluster->buffer = malloc(cluster->cluster_size);
   cluster->slot_size = entry->slot_size;

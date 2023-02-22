@@ -1,5 +1,5 @@
 ############################################################################
-# apps/examples/hello/Make.defs
+# apps/examples/ts2native/Make.defs
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -18,18 +18,19 @@
 #
 ############################################################################
 
+# This makefile is to integrate ts2native into vela.
+# just put this project into apps/examples and open built switch for this project,
+# tsshell should be ok in nuttx
+
 include $(APPDIR)/Make.defs
 
-# Hello, World! built-in application info
 
 PROGNAME  = $(CONFIG_EXAMPLES_TSSHELL_PROGNAME)
 PRIORITY  = $(CONFIG_EXAMPLES_TSSHELL_PRIORITY)
 STACKSIZE = $(CONFIG_EXAMPLES_TSSHELL_STACKSIZE)
 MODULE    = $(CONFIG_EXAMPLES_TSSHELL)
 
-# Hello, World! Example
-
-CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/examples/ts2native/runtime
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/examples/ts2native/runtime -DTEST
 
 MAINSRC = ./runtime/ts_shell.c
 
@@ -43,17 +44,18 @@ CSRCS += runtime/ts_std.c
 CSRCS += runtime/ts_std_console.c
 CSRCS += runtime/ts_std_promise.c
 CSRCS += runtime/ts_std_timer.c
-# CSRCS += runtime/test/test_async_await_manual.c
-# CSRCS += runtime/test/test_class1_manual.c
-# CSRCS += runtime/test/test_class2_manual.c
-# CSRCS += runtime/test/test_function1_manual.c
-# CSRCS += runtime/test/test_function2_manual.c
+CSRCS += runtime/test/ts_built_in_modules.c
+CSRCS += runtime/test/test_async_await_manual.c
+CSRCS += runtime/test/test_class1_manual.c
+CSRCS += runtime/test/test_class2_manual.c
+CSRCS += runtime/test/test_function1_manual.c
+CSRCS += runtime/test/test_function2_manual.c
 CSRCS += runtime/test/test_hello_manual.c
-# CSRCS += runtime/test/test_interface1_manual.c
-# CSRCS += runtime/test/test_interface2_manual.c
-# CSRCS += runtime/test/test_promise1_manual.c
-# CSRCS += runtime/test/test_timeout_manual.c
-# CSRCS += runtime/test/test_trycatch_manual.c
-# CSRCS += runtime/test/test_union1_manual.c
+CSRCS += runtime/test/test_interface1_manual.c
+CSRCS += runtime/test/test_interface2_manual.c
+CSRCS += runtime/test/test_promise1_manual.c
+CSRCS += runtime/test/test_timeout_manual.c
+CSRCS += runtime/test/test_trycatch_manual.c
+CSRCS += runtime/test/test_union1_manual.c
 
 include $(APPDIR)/Application.mk

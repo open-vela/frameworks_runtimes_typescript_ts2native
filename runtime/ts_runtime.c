@@ -39,7 +39,7 @@ static void _delete_object(ts_gc_t* gc, ts_object_t* obj) {
 
 ts_runtime_t* ts_runtime_create(int argc, const char* argv[]) {
   ts_runtime_t* rt = (ts_runtime_t*)malloc(sizeof(ts_runtime_t));
-
+  memset(rt, 0, sizeof(ts_runtime_t));
   // create and initialize gc
   rt->gc = ts_gc_create(NULL);
   rt->new_object = _new_object;
