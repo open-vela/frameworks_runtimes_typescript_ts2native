@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <alloca.h>
+#include <inttypes.h>
 
 #include "ts_common.h"
 #include "ts_runtime.h"
@@ -223,9 +224,9 @@ static inline size_t ts_object_to_c_str(ts_object_t* obj, char* buffer, size_t l
     case ts_object_uint32:
       return snprintf(buffer, len, "%u", ((ts_uint32_object_t*)(obj))->value);
     case ts_object_int64:
-      return snprintf(buffer, len, "%ld", ((ts_int64_object_t*)(obj))->value);
+      return snprintf(buffer, len, PRId64, ((ts_int64_object_t*)(obj))->value);
     case ts_object_uint64:
-      return snprintf(buffer, len, "%lu", ((ts_uint64_object_t*)(obj))->value);
+      return snprintf(buffer, len, PRIu64, ((ts_uint64_object_t*)(obj))->value);
     case ts_object_boolean:
       return snprintf(buffer, len, "%s", ((ts_boolean_object_t*)(obj))->value ? "true" : "false");
     case ts_object_float:

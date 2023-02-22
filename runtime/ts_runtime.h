@@ -239,6 +239,7 @@ struct _ts_module_t {
 
 typedef enum _ts_module_package_type_t {
   ts_module_no_package,
+  ts_module_built_in,
   ts_module_dynamic_library,
   ts_module_package
 } ts_module_package_type_t;
