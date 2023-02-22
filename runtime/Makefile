@@ -33,10 +33,29 @@ runtime_objs =          \
     ts_exception.o      \
     ts_package.o
 
-RT_LDFLAGS =$(BUILD_32BIT)
+builtin_objs = 						          \
+	test/ts_built_in_modules.o           \
+    test/test_async_await_manual.o  \
+    test/test_class1_manual.o       \
+    test/test_class2_manual.o       \
+    test/test_function1_manual.o    \
+    test/test_function2_manual.o    \
+    test/test_hello_manual.o        \
+    test/test_interface1_manual.o   \
+    test/test_interface2_manual.o   \
+    test/test_promise1_manual.o     \
+    test/test_timeout_manual.o      \
+    test/test_trycatch_manual.o     \
+    test/test_union1_manual.o
 
+RT_LDFLAGS = $(BUILD_32BIT)
 
 RT_CFLAGS = $(BUILD_32BIT) -I. -g
+
+vela: RT_LDFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
+vela: RT_CFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
+vela: $(runtime_objs) $(builtin_objs)
+	$(CC) -o tsshell_vela $^ $(RT_LDFLAGS) -ldl
 
 tsshell: $(runtime_objs)
 	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl -lm
@@ -51,7 +70,7 @@ test/%.o:test/%.c
 	$(CC) -fPIC -c -o $@ $< $(RT_CFLAGS)
 
 clean:
-	rm -f *.o tsshell *.so test/test_*.o
+	rm -f *.o tsshell tsshell_vela *.so test/test_*.o
 
 run_tests:tsshell $(test_module_targets)
 	$(run_test_modules) echo "============ END =============="

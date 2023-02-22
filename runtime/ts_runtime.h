@@ -3,6 +3,7 @@
 
 #include <stdint.h> 
 #include <alloca.h>
+#include <string.h>
 
 #include "ts_common.h"
 #include "ts_debug.h"
@@ -626,6 +627,7 @@ inline static ts_value_type_t ts_function_return_type(ts_object_t* self) {
 //////////////////////////////////////////
 // GC Functions
 inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void* buffer, size_t max_objects) {
+  memset(buffer, 0, sizeof(ts_gc_local_scope_t) + sizeof(ts_object_t*) * max_objects);
   ts_gc_local_scope_t* scope = (ts_gc_local_scope_t*)(buffer);
   scope->objects[max_objects - 1] = NULL;
 
@@ -636,7 +638,7 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 #define TS_PUSH_LOCAL_SCOPE(runtime, N) \
   ts_gc_local_scope_t* __ts_local_scope__ = \
       ts_gc_make_local_scope((runtime), \
-		   alloca(sizeof(ts_gc_local_scope_t) + sizeof(ts_object_t*) * ((N)+1)), \
+		   alloca(sizeof(ts_gc_local_scope_t) + sizeof(ts_object_t*) * ((N) + 1)), \
 		   (N) + 1)
 
 #define TS_POP_LOCAL_SCOPE(runtime) \

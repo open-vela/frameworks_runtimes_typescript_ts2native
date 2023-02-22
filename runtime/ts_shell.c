@@ -4,6 +4,10 @@
 #include "ts_exception.h"
 #include "ts_std.h"
 
+#ifdef TEST
+#include "test/ts_built_in_modules.h"
+#endif
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -229,6 +233,11 @@ int main(int argc, const char* argv[]) {
 
   TS_TRY_BEGIN(rt)
     ts_module_t* m = ts_load_module(rt, argv[1], ts_module_no_package);
+#ifdef TEST
+    if (!m) {
+      m = ts_try_load_module_from_built_in(rt, argv[1]);
+    }
+#endif
     if (m) {
       TS_PUSH_LOCAL_SCOPE(rt, 1);
       TS_SET_LOCAL_OBJECT(0, m);
