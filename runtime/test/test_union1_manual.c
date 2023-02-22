@@ -146,7 +146,7 @@ static int _module_initialize(ts_module_t* m, ts_argument_t args, ts_return_t re
     TS_SET_OBJECT_ARG(TS_UNION_INDEX(TS_LOCAL_OBJECT(1), 1));
     ts_module_call_function(m, 0, TS_ARGUMENTS, NULL);
   } while(0);
-
+  TS_POP_LOCAL_SCOPE(rt);
   return 0;
 }
 

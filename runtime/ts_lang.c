@@ -115,6 +115,7 @@ static ts_vtable_t* _ts_lang_vtables[] = {
   &TS_PRIMITVE_VTABLE_NAME(float).base,
   &TS_PRIMITVE_VTABLE_NAME(double).base,
   &_string_vt.base,
+  NULL, // lang_class_bigint
   NULL, // lang_class_aray
   NULL, // lang_class_map
   NULL, // lang_class_set
