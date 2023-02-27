@@ -12,7 +12,8 @@ test_modules= \
   test_promise1          \
   test_async_await       \
   test_union1            \
-  test_trycatch
+  test_trycatch			 \
+  test_date
 
 test_module_targets=$(foreach m, $(test_modules), lib$(m).so)
 run_test_modules=$(foreach m, $(test_modules), echo "\n\n== RUN \"./tsshell $(m)\" ===" && ./tsshell $(m) &&)
@@ -28,6 +29,7 @@ runtime_objs =          \
     ts_std_console.o    \
     ts_std_timer.o      \
     ts_std_promise.o    \
+    ts_std_date.o       \
     ts_exception.o      \
     ts_package.o
 
@@ -37,7 +39,7 @@ RT_LDFLAGS =$(BUILD_32BIT)
 RT_CFLAGS = $(BUILD_32BIT) -I. -g
 
 tsshell: $(runtime_objs)
-	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl
+	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl -lm
 
 libtest_%.so: test/test_%_manual.o
 	$(CC) -fPIC -shared -o $@ $^ $(RT_LDFLAGS)
