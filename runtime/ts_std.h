@@ -16,6 +16,7 @@ typedef enum _ts_std_object_index_t {
   ts_std_promise_resolver_index,
   ts_std_promise_rejecter_index,
   ts_std_exception_error_index,
+  ts_std_date_index,
   ts_std_object_last_index
 } ts_std_object_index_t;
 
@@ -197,6 +198,95 @@ static inline ts_object_t* ts_std_promise_from(ts_object_t* resolver_or_rejector
   }
   return NULL;
 }
+
+///////////////////////////////////////
+// Date
+
+#define TS_DATE_GET_VALUE_DEF(NAME, INDEX)                                     \
+  static inline int64_t ts_std_date_##NAME(ts_object_t* obj, ts_runtime_t* rt, \
+                                           ts_argument_t args) {               \
+    ts_value_t ret;                                                            \
+    ts_method_call(obj, ts_method_last + (INDEX), args, &ret);                 \
+    return ret.fval;                                                           \
+  }
+
+// todo: this macro
+#define TS_DATE_SET_VALUE_DEF(NAME, INDEX)                                  \
+  static inline void ts_std_date_##NAME(ts_object_t* obj, ts_runtime_t* rt, \
+                                        ts_argument_t args) {               \
+    ts_value_t ret;                                                         \
+    ts_method_call(obj, ts_method_last + (INDEX), args, &ret);              \
+  }
+
+#define TS_DATE_GET_STRING_DEF(NAME, INDEX)                                    \
+  static inline void ts_std_date_##NAME(ts_object_t* obj, ts_runtime_t* rt,    \
+                                        ts_argument_t args, ts_value_t* ret) { \
+    ts_method_call(obj, ts_method_last + (INDEX), args, ret);                  \
+  }
+
+static inline double ts_std_date_now(ts_runtime_t* rt, ts_argument_t args) {
+  ts_value_t ret;
+  ts_method_call(ts_module_object_of(rt->std_module, ts_std_date_index),
+                 ts_method_last + 0, args, &ret);
+  return ret.dval;
+}
+
+// JS_CFUNC_DEF("parse", 1, js_Date_parse ),
+
+static inline double ts_std_date_UTC(ts_runtime_t* rt, ts_argument_t args) {
+  ts_value_t ret;
+  ts_method_call(ts_module_object_of(rt->std_module, ts_std_date_index),
+                 ts_method_last + 2, args, &ret);
+  return ret.dval;
+}
+
+// JS_CFUNC_DEF("valueOf", 0, _ts_std_date_getTime ),
+TS_DATE_GET_STRING_DEF(toString, 4)
+// JS_CFUNC_DEF("[Symbol.toPrimitive]", 1, js_date_Symbol_toPrimitive ),
+TS_DATE_GET_STRING_DEF(toUTCString, 6)
+TS_DATE_GET_STRING_DEF(toGMTString, 7)
+TS_DATE_GET_STRING_DEF(toISOString, 8)
+TS_DATE_GET_STRING_DEF(toDateString, 9)
+TS_DATE_GET_STRING_DEF(toTimeString, 10)
+TS_DATE_GET_STRING_DEF(toLocaleString, 11)
+TS_DATE_GET_STRING_DEF(toLocaleDateString, 12)
+TS_DATE_GET_STRING_DEF(toLocaleTimeString, 13)
+TS_DATE_GET_VALUE_DEF(getTimezoneOffset, 14)
+TS_DATE_GET_VALUE_DEF(getTime, 15)
+TS_DATE_GET_VALUE_DEF(getYear, 16)
+TS_DATE_GET_VALUE_DEF(getFullYear, 17)
+TS_DATE_GET_VALUE_DEF(getUTCFullYear, 18)
+TS_DATE_GET_VALUE_DEF(getMonth, 19)
+TS_DATE_GET_VALUE_DEF(getUTCMonth, 20)
+TS_DATE_GET_VALUE_DEF(getDate, 21)
+TS_DATE_GET_VALUE_DEF(getUTCDate, 22)
+TS_DATE_GET_VALUE_DEF(getHours, 23)
+TS_DATE_GET_VALUE_DEF(getUTCHours, 24)
+TS_DATE_GET_VALUE_DEF(getMinutes, 25)
+TS_DATE_GET_VALUE_DEF(getUTCMinutes, 26)
+TS_DATE_GET_VALUE_DEF(getSeconds, 27)
+TS_DATE_GET_VALUE_DEF(getUTCSeconds, 28)
+TS_DATE_GET_VALUE_DEF(getMilliseconds, 29)
+TS_DATE_GET_VALUE_DEF(getUTCMilliseconds, 30)
+TS_DATE_GET_VALUE_DEF(getDay, 31)
+TS_DATE_GET_VALUE_DEF(getUTCDay, 32)
+TS_DATE_SET_VALUE_DEF(setTime, 33)
+TS_DATE_SET_VALUE_DEF(setMilliseconds, 34)
+TS_DATE_SET_VALUE_DEF(setUTCMilliseconds, 35)
+TS_DATE_SET_VALUE_DEF(setSeconds, 36)
+TS_DATE_SET_VALUE_DEF(setUTCSeconds, 37)
+TS_DATE_SET_VALUE_DEF(setMinutes, 38)
+TS_DATE_SET_VALUE_DEF(setUTCMinutes, 39)
+TS_DATE_SET_VALUE_DEF(setHours, 40)
+TS_DATE_SET_VALUE_DEF(setUTCHours, 41)
+TS_DATE_SET_VALUE_DEF(setDate, 42)
+TS_DATE_SET_VALUE_DEF(setUTCDate, 43)
+TS_DATE_SET_VALUE_DEF(setMonth, 44)
+TS_DATE_SET_VALUE_DEF(setUTCMonth, 45)
+TS_DATE_SET_VALUE_DEF(setYear, 46)
+TS_DATE_SET_VALUE_DEF(setFullYear, 47)
+TS_DATE_SET_VALUE_DEF(setUTCFullYear, 48)
+// JS_CFUNC_DEF("toJSON", 1, js_date_toJSON ),
 
 TS_CPP_END
 
