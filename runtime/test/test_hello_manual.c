@@ -7,9 +7,39 @@
 static int _module_initialize(ts_module_t* obj, ts_argument_t args, ts_return_t ret) {
   do {
     TS_DEF_ARGUMENTS(1);
-    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "hello world"));
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "hello world!"));
     ts_std_console_log(obj->runtime, TS_ARGUMENTS);
   } while(0);
+
+  do {
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "info : hello world!"));
+    ts_std_console_info(obj->runtime, TS_ARGUMENTS);
+  } while(0);
+
+  do {
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "debug : hello world!"));
+    ts_std_console_debug(obj->runtime, TS_ARGUMENTS);
+  } while(0);
+
+  do {
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "warn : hello world!"));
+    ts_std_console_warn(obj->runtime, TS_ARGUMENTS);
+  } while(0);
+
+  do {
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(obj->runtime, "error : hello world!"));
+    ts_std_console_error(obj->runtime, TS_ARGUMENTS);
+  } while(0);
+
+  do {
+    TS_DEF_ARGUMENTS(0);
+    ts_std_console_trace(obj->runtime, TS_ARGUMENTS);
+  } while(0);
+
   return 0;
 }
 

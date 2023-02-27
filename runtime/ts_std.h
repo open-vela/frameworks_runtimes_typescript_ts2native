@@ -80,12 +80,20 @@ inline static void ts_std_console_log(ts_runtime_t* rt, ts_argument_t args) {
   ts_std_console_output(rt, 1, args);
 }
 
+inline static void ts_std_console_debug(ts_runtime_t* rt, ts_argument_t args) {
+  ts_std_console_output(rt, 2, args);
+}
+
 inline static void ts_std_console_warn(ts_runtime_t* rt, ts_argument_t args) {
   ts_std_console_output(rt, 3, args);
 }
 
 inline static void ts_std_console_error(ts_runtime_t* rt, ts_argument_t args) {
   ts_std_console_output(rt, 4, args);
+}
+
+inline static void ts_std_console_trace(ts_runtime_t* rt, ts_argument_t args) {
+  ts_std_console_output(rt, 5, args);
 }
 
 /////////////////////////////////////////////////////////////////

@@ -353,7 +353,7 @@ static inline ts_object_t* ts_object_add_ref(ts_object_t* obj) {
 static inline void ts_object_release(ts_object_t* obj) {
   if (obj) {
     ts_gc_data_header_t* header = TS_OFFSET(ts_gc_data_header_t, obj, -sizeof(ts_gc_data_header_t));
-    if (-- header->ref_count) {
+    if (-- header->ref_count == 0) {
       ts_runtime_t* rt = ts_runtime_from_object(obj);
       rt->delete_object(rt->gc, obj);
     }

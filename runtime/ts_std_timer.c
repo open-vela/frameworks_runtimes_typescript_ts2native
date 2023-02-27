@@ -12,7 +12,10 @@ typedef struct _ts_timer_node_t {
   ts_object_t*  callback;
   uint64_t      timeout;
   uint64_t      repeat; // repeat timeout
-  uint64_t      timer_id;
+  uint32_t      timer_id;
+  uint32_t      handle_timer:1; // on timeout
+  uint32_t      clear_timer:1; // fire timeout
+  uint32_t      flags:30;
   ts_value_t    params[1]; // the params, count and values
 } ts_timer_node_t;
 
@@ -45,6 +48,9 @@ static ts_timer_node_t* new_timer_node(ts_runtime_t* rt,
   node->repeat = is_repeat ? timeout : 0;
   node->timer_id = timer_id;
   node->params[0].lval = param_count;
+  node->handle_timer = 0;
+  node->clear_timer = 0;
+  node->flags = 0;
 
   for (uint32_t i = 0; i < TS_GET_ARG_COUNT(param_count); i ++) {
     if (TS_CHECK_ARG_IS_OBJECT(param_count, i)) {
@@ -58,6 +64,9 @@ static ts_timer_node_t* new_timer_node(ts_runtime_t* rt,
 }
 
 static void free_timer_node(ts_timer_node_t* node) {
+  if (!node) {
+    return ;
+  }
   if (node->callback) {
     ts_object_release(node->callback);
   }
@@ -120,8 +129,13 @@ static int _ts_std_timer_add_timeout(ts_std_timer_t* self, ts_boolean_t repeat, 
 static int _ts_std_timer_clear_timeout(ts_std_timer_t* self, ts_argument_t args, ts_return_t ret) {
   ts_timer_node_t* node = TS_ARG_PTR(args, 0);
   if (node) {
-    heap_remove(&self->timer_heap, &node->node, timer_less_than);
-    free_timer_node(node);
+    if (node->handle_timer) {
+      node->clear_timer = 1;
+    }
+    else {
+      heap_remove(&self->timer_heap, &node->node, timer_less_than);
+      free_timer_node(node);
+    }
   }
 }
 
@@ -218,14 +232,16 @@ static void _ts_std_timer_on_timeout(ts_runtime_t* rt, uint64_t timeout) {
     // remove node first
     heap_remove(&timer->timer_heap, &node->node, timer_less_than);
 
+    node->handle_timer = 1;
     _std_timer_fire(node);
+    node->handle_timer = 0;
 
-    if (node->repeat) {
+    if (!node->clear_timer && node->repeat) {
       reset_timer_timeout(rt, node, node->repeat); 
       heap_insert(&timer->timer_heap, &node->node, timer_less_than);
     } else {
       free_timer_node(node);
-    } 
+    }
 
     ts_timer_node_t* min_node = (ts_timer_node_t*)(heap_min(&timer->timer_heap));
     if (min_node) {

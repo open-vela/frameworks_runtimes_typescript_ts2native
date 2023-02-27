@@ -1,4 +1,7 @@
-
+#ifdef CONFIG_SCHED_BACKTRACE
+#include <execinfo.h>
+#endif
+#include <stdlib.h>
 #include "ts_std.h"
 #include "ts_lang.h"
 #include "ts_std_console_internal.h"
@@ -53,7 +56,31 @@ TS_CONSOLE_OUTPUT_DEF(debug)
 TS_CONSOLE_OUTPUT_DEF(warn)
 TS_CONSOLE_OUTPUT_DEF(error)
 
-static TS_VTABLE_DEF(_console_vt, 5) = {
+static int _ts_console_trace(ts_object_t* self, ts_argument_t args, ts_return_t ret) {
+#ifdef CONFIG_SCHED_BACKTRACE
+  void *buffer[100];
+  char **symbols;
+
+  int num = backtrace(buffer, 100);
+  printf("\nbacktrace() returned %d addresses\n", num);
+
+  symbols = backtrace_symbols(buffer, num);
+  if (symbols == NULL) {
+    perror("backtrace_symbols");
+  }
+
+  for (int j = 0; j < num; j++)
+    printf("  %s\n", symbols[j]);
+
+  printf("\n");
+  free(symbols);
+#else
+  printf("Please define CONFIG_SCHED_BACKTRACE \n");
+#endif
+  return 0;
+}
+
+static TS_VTABLE_DEF(_console_vt, 6) = {
   TS_VTABLE_BASE(
     sizeof(ts_std_console_t),
     "console",
@@ -70,6 +97,7 @@ static TS_VTABLE_DEF(_console_vt, 5) = {
     {.method = _ts_console_debug},
     {.method = _ts_console_warn},
     {.method = _ts_console_error},
+    {.method = _ts_console_trace},
   }
 };
 
