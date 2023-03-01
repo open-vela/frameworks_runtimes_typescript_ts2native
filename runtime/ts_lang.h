@@ -142,6 +142,47 @@ TS_PRIMITIVE_DEFINES(TS_PRIMITIVE_OBJECT_INIT_FUNC)
 #define TS_DOUBLE_NEW_STACK(rt, init_value) \
 	TS_PRIMITIVE_OBJECT_STACK_INIT(rt, double, init_value)
 
+inline static int ts_object_to_int(ts_object_t* obj, int defval) {
+  switch(ts_object_base_type(obj)) {
+    case ts_object_int32:
+      return ((ts_int32_object_t*)obj)->value;
+    case ts_object_uint32:
+      return ((ts_uint32_object_t*)obj)->value;
+    case ts_object_int64:
+      return (int)(((ts_int64_object_t*)obj)->value);
+    case ts_object_uint64:
+      return (int)(((ts_uint64_object_t*)obj)->value);
+    case ts_object_boolean:
+      return ((ts_boolean_object_t*)obj)->value;
+    case ts_object_float:
+      return (int)(((ts_float_object_t*)obj)->value);
+    case ts_object_double:
+      return (int)(((ts_double_object_t*)obj)->value);
+  }
+  return defval;
+}
+
+inline static double ts_object_to_number(ts_object_t* obj, double defval) {
+  switch(ts_object_base_type(obj)) {
+    case ts_object_int32:
+      return (double)(((ts_int32_object_t*)obj)->value);
+    case ts_object_uint32:
+      return (double)(((ts_uint32_object_t*)obj)->value);
+    case ts_object_int64:
+      return (double)(((ts_int64_object_t*)obj)->value);
+    case ts_object_uint64:
+      return (double)(((ts_uint64_object_t*)obj)->value);
+    case ts_object_boolean:
+      return ((ts_boolean_object_t*)obj)->value ? 1.0 : 0;
+    case ts_object_float:
+      return ((ts_float_object_t*)obj)->value;
+    case ts_object_double:
+      return ((ts_double_object_t*)obj)->value;
+  }
+  return defval;
+}
+
+
 static inline ts_object_t* ts_string_init(ts_runtime_t* rt, ts_object_t* obj, const char* init_value) {
   obj->vtable_env = &(rt->std_module->classes[lang_class_string]);
   ts_string_t* str = (ts_string_t*)obj;
