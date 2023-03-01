@@ -433,12 +433,24 @@ static inline int ts_method_call(ts_object_t* obj, uint32_t index, ts_argument_t
   return (member.method)(obj, args, ret);
 }
 
+static inline ts_value_t ts_method_call_return(ts_object_t* obj, uint32_t index, ts_argument_t args) {
+  ts_value_t ret;
+  ts_method_call(obj, index, args, &ret);
+  return ret;
+}
+
 static inline int ts_super_call(ts_object_t* obj, uint32_t index, ts_argument_t args, ts_return_t ret) {
   ts_debug_check(obj != NULL, "object is NULL");
   ts_debug_check(OBJECT_VTABLE(obj)->super != NULL,
 		  "object %p(\"%s\") \'s super is NULL", obj, OBJECT_VTABLE(obj)->object_name);
   ts_member_t member = ts_vtable_member(OBJECT_VTABLE(obj)->super, index);
   return (member.method)(obj, args, ret);
+}
+
+static inline ts_value_t ts_super_call_return(ts_object_t* obj, uint32_t index, ts_argument_t args) {
+  ts_value_t ret;
+  ts_super_call(obj, index, args, &ret);
+  return ret;
 }
 
 static inline void ts_super_destroy(ts_object_t* obj) {
@@ -488,6 +500,12 @@ static inline int ts_interface_method_call(ts_interface_t* self, uint32_t index,
   ts_object_t* obj  = ts_cast_interface_object(self);
 
   return ts_method_call(obj, self->interface_entry->member_offset + index, args, ret);
+}
+
+static inline ts_value_t ts_interface_method_call_return(ts_interface_t* self, uint32_t index, ts_argument_t args) {
+  ts_value_t ret;
+  ts_interface_method_call(self, index, args, &ret);
+  return ret;
 }
 
 #define TS_OBJECT_MEMBER_OF(Type, obj, offset) \
