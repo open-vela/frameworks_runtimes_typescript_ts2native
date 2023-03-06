@@ -104,13 +104,13 @@ inline static int64_t ts_std_set_timeout_params(ts_runtime_t* rt, ts_argument_t 
 inline static int64_t ts_std_set_timeout(ts_runtime_t* rt, ts_object_t* func, int64_t delay) {
   TS_DEF_ARGUMENTS(2);
   TS_SET_OBJECT_ARG(func);
-  TS_SET_LONG_ARG(delay);
+  TS_SET_INT64_ARG(delay);
   return ts_std_set_timeout_params(rt, TS_ARGUMENTS);
 }
 
 inline static void ts_std_clear_timeout(ts_runtime_t* rt, int64_t timer_id) {
   TS_DEF_ARGUMENTS(1);
-  TS_SET_LONG_ARG(timer_id);
+  TS_SET_INT64_ARG(timer_id);
   ts_std_timer_function(rt, 1, TS_ARGUMENTS, NULL);
 }
 
@@ -123,13 +123,13 @@ inline static int64_t ts_std_set_interval_params(ts_runtime_t* rt, ts_argument_t
 inline static int64_t ts_std_set_interval(ts_runtime_t* rt, ts_object_t* func, int64_t delay) {
   TS_DEF_ARGUMENTS(2);
   TS_SET_OBJECT_ARG(func);
-  TS_SET_LONG_ARG(delay);
+  TS_SET_INT64_ARG(delay);
   return ts_std_set_interval_params(rt, TS_ARGUMENTS);
 }
 
 inline static int64_t ts_std_clear_interval(ts_runtime_t* rt, int64_t timer_id) {
   TS_DEF_ARGUMENTS(1);
-  TS_SET_LONG_ARG(timer_id);
+  TS_SET_INT64_ARG(timer_id);
   ts_std_timer_function(rt, 3, TS_ARGUMENTS, NULL);
 }
 

@@ -39,7 +39,7 @@ static int _func_impl_promise_executor1(ts_object_t* self, ts_argument_t args, t
   do {
     TS_DEF_ARGUMENTS(2);
     TS_SET_OBJECT_ARG(closuer1);
-    TS_SET_LONG_ARG(300);
+    TS_SET_INT64_ARG(300);
     ts_std_set_timeout_params(rt, TS_ARGUMENTS);
   } while(0);
   return 0;
