@@ -96,7 +96,7 @@ static void _promise_process_resolve(ts_std_promise_t* promise, ts_std_resolve_e
       if (promise->resolved_type == ts_value_object)
         TS_SET_OBJECT_ARG(promise->result.object);
       else
-        TS_SET_LONG_ARG(promise->result.lval);
+        TS_SET_INT64_ARG(promise->result.lval);
 
       ts_function_call(callback, TS_ARGUMENTS, &ret);
       ret_type = ts_function_return_type(callback);
