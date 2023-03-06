@@ -23,7 +23,7 @@ static int _func_impl_test_timeout(ts_object_t* self, ts_argument_t args, ts_ret
   do {
     TS_DEF_ARGUMENTS(3);
     TS_SET_OBJECT_ARG(self);  // callback
-    TS_SET_LONG_ARG(500); // delayms
+    TS_SET_INT64_ARG(500); // delayms
     TS_SET_INT_ARG(n + 1);
     ts_std_set_timeout_params(rt, TS_ARGUMENTS);
   } while(0);

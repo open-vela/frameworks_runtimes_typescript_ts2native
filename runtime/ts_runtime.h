@@ -624,17 +624,17 @@ inline static ts_gc_local_scope_t* ts_gc_make_local_scope(ts_runtime_t* r, void*
 
 ///////////////////////////////////////////////////////////////
 // ts arguments
-#define TS_DEF_ARGUMENTS(N)  \
-  ts_value_t __arguments[N+1]; \
-  __arguments[0].lval = ((N)&0xff); \
+#define TS_DEF_ARGUMENTS(N)               \
+  ts_value_t __arguments[((N) & 0xff)+1]; \
+  __arguments[0].lval = ((N) & 0xff);     \
   ts_value_t* __cur_arg = &__arguments[1]
 
 #define TS_ARGUMENTS  __arguments
 
 #define TS_SET_INT_ARG(arg) \
-  (__cur_arg ++)->lval = arg
+  (__cur_arg ++)->ival = arg
 
-#define TS_SET_LONG_ARG(arg) \
+#define TS_SET_INT64_ARG(arg) \
   (__cur_arg ++)->lval = arg
 
 #define TS_SET_FLOAT_ARG(arg) \
