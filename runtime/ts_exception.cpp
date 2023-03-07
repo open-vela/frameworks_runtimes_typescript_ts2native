@@ -4,7 +4,11 @@
 #include "ts_std.h"
 #include "ts_lang.h"
 
-#include "ts_exception.h"
+#include "ts_exception.hpp"
+
+//#ifdef TOWASM
+uint32_t global_index = 1;
+//#endif
 
 typedef struct _ts_exception_error_t {
   ts_object_t base;
@@ -15,6 +19,9 @@ typedef struct _ts_exception_error_t {
   int lineNo;
   int colNo;
 } ts_exception_error_t;
+
+extern "C"
+{
 
 static ts_exception_error_t* ts_to_exception_error(ts_object_t* obj) {
   return (ts_exception_error_t*)(obj);
@@ -71,4 +78,39 @@ static TS_VTABLE_DEF(_exception_error_vt, 0) = {
 
 void ts_init_exception_error_classes(ts_module_t* m) {
   ts_init_vtable_env(&m->classes[lang_class_max + ts_std_exception_error_index], &_exception_error_vt.base, m, NULL);
+}
+
+#ifdef TOWASM
+void jmpCallbackTry(int blockid,uint32_t runtime)
+{
+    ts_runtime_t* rt = (ts_runtime_t*)(runtime);
+    ts_try_block_t* tmp = rt->try_block;
+    while (tmp!=NULL)
+    {
+      if(tmp->block_id == blockid)
+      {
+        tmp->callbackTry();
+        break;
+      }
+      tmp = tmp->prev;
+    }
+}
+
+void jmpCallbackExp(int blockid,int val,uint32_t runtime)
+{
+    ts_runtime_t* rt = (ts_runtime_t*)(runtime);
+    ts_try_block_t* tmp = rt->try_block;
+    while (tmp!=NULL)
+    {
+      if(tmp->block_id == blockid)
+      {
+        if(tmp->callbackExp!=NULL)
+            tmp->callbackExp(rt,val);
+        break;
+      }
+      tmp = tmp->prev;
+    }
+}
+#endif
+
 }

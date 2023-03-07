@@ -57,6 +57,36 @@ vela: RT_CFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
 vela: $(runtime_objs) $(builtin_objs)
 	$(CC) -o tsshell_vela $^ $(RT_LDFLAGS) -ldl
 
+runtime_srcs =                     \
+    ts_shell.cpp                   \
+    ts_gc.c                        \
+    ts_lang.c                      \
+    ts_runtime.c                   \
+    ts_std.c                       \
+    ts_std_console.c               \
+    ts_std_timer.c                 \
+    ts_std_promise.c               \
+    ts_exception.cpp               \
+    ts_package.c                   \
+    ts_built_in_modules.c          \
+    test/test_class2_manual.c      \
+    test/test_async_await_manual.c \
+    test/test_class1_manual.c      \
+    test/test_class2_manual.c      \
+    test/test_function1_manual.c   \
+    test/test_function2_manual.c   \
+    test/test_hello_manual.c       \
+    test/test_interface1_manual.c  \
+    test/test_interface2_manual.c  \
+    test/test_promise1_manual.c    \
+    test/test_timeout_manual.c     \
+    test/test_trycatch_manual.cpp  \
+    test/test_union1_manual.c
+
+#运行make wasm之前，采用wasi-sdk19版本，在环境变量中指定export CC="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
+wasm: $(runtime_srcs)
+	$(CC) -I. -o tsshell.wasm $^ -Wl,--strip-all -Wl,--export=jmpCallbackExp -Wl,--export=jmpCallbackTry -Wl,--export=__main_argc_argv -Wl,--allow-undefined -DTOWASM
+
 tsshell: $(runtime_objs)
 	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl -lm
 

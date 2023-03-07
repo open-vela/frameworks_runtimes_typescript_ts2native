@@ -332,5 +332,6 @@ static inline void ts_closuer_one_object_gc_visit(ts_object_t* self, ts_object_v
 
 #define TS_END_UNION_OBJECT  {} /*else block*/ } while(0);
 
+TS_CPP_END
 
 #endif  // TS_LNAG_H_
