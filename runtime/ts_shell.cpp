@@ -250,13 +250,7 @@ int main(int argc, const char* argv[]) {
   ts_runtime_t* rt = ts_runtime_create(argc, argv);
 #ifdef TOWASM
   TS_TRY_BEGIN(rt)
-  TS_CATCH(rt,err)
-    TS_DEF_ARGUMENTS(2);
-    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "TS Error:"));
-    TS_SET_OBJECT_ARG(err);
-    ts_std_console_log(rt, TS_ARGUMENTS);
-  TS_TRY_END
-  ts_module_t* m = ts_try_load_module_from_built_in(rt, argv[1]);
+    ts_module_t* m = ts_try_load_module_from_built_in(rt, argv[1]);
   if (m) {
     TS_PUSH_LOCAL_SCOPE(rt, 1);
     TS_SET_LOCAL_OBJECT(0, m);
@@ -272,7 +266,12 @@ int main(int argc, const char* argv[]) {
     free_messasge_loop(loop);
     TS_POP_LOCAL_SCOPE(rt);
   }
-  TS_TRY_REAL_END
+  TS_CATCH(rt,err)
+    TS_DEF_ARGUMENTS(2);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "TS Error:"));
+    TS_SET_OBJECT_ARG(err);
+    ts_std_console_log(rt, TS_ARGUMENTS);
+  TS_TRY_END
 
 #else 
 

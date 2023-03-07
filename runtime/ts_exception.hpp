@@ -217,6 +217,7 @@ static inline ts_object_t* ts_exception_new_error(ts_runtime_t* rt, const char* 
 
 #ifdef TOWASM
 #define TS_CATCH(rt,err)                                        \
+   }; }while(0);                                                           \
    rt->try_block->callbackExp = [](ts_runtime_t*rt ,int val) ->void      \
    {  do{                                                       \
     ts_runtime_t* ___rt___ = (rt);                              \
@@ -236,19 +237,12 @@ static inline ts_object_t* ts_exception_new_error(ts_runtime_t* rt, const char* 
 #ifdef TOWASM
 #define TS_TRY_END                                              \
     } ts_exception_try_end(___rt___);                           \
-  } while(0); };   
+  } while(0); };   \
+  setjmp_inwamr((uint32_t)rt,rt->try_block->block_id);    
 #else
 #define TS_TRY_END                                              \
   } ts_exception_try_end(___rt___);                             \
 } while(0); 
-#endif
-
-#ifdef TOWASM
-//增加TS_TRY_REAL_END宏，把try block都包到回调函数里
-#define TS_TRY_REAL_END                                         \
-  };                                                            \
-  setjmp_inwamr((uint32_t)___rt___,rt->try_block->block_id);    \
-}while(0);
 #endif
 
 TS_CPP_END

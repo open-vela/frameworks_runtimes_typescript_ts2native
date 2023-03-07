@@ -11,6 +11,11 @@ static int _func_impl_inner_func(ts_object_t* self, ts_argument_t args, ts_retur
   //这里可以看到，主要区别在于，将TS_CATCH的定义提前到紧跟着TS_TRY_BEGIN
   //因为这里的宏定义展开是动态赋值了rt->try_block->callback回调函数，必须放在最前面
   //所以后面ts转化c代码，也必须按照这个规范来
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "=== inner do something =="));
+    ts_std_console_log(rt, TS_ARGUMENTS);
+    
+    TS_THORW_ERROR(rt, "inner fatal error");
   TS_CATCH(rt,err)
     TS_DEF_ARGUMENTS(2);
     TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "inner error = "));
@@ -23,13 +28,6 @@ static int _func_impl_inner_func(ts_object_t* self, ts_argument_t args, ts_retur
     TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "== inner finally =="));
     ts_std_console_log(rt, TS_ARGUMENTS);
   TS_TRY_END
-
-    TS_DEF_ARGUMENTS(1);
-    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "=== inner do something =="));
-    ts_std_console_log(rt, TS_ARGUMENTS);
-    
-    TS_THORW_ERROR(rt, "inner fatal error");
-  TS_TRY_REAL_END
 #else
   TS_TRY_BEGIN(rt)
     TS_DEF_ARGUMENTS(1);
@@ -60,6 +58,10 @@ static int _func_impl_outter_func(ts_object_t* self, ts_argument_t args, ts_retu
   ts_runtime_t* rt = ts_runtime_from_object(self);
 #ifdef TOWASM
   TS_TRY_BEGIN(rt)
+    TS_DEF_ARGUMENTS(1);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "=== outter do ===="));
+    ts_std_console_log(rt, TS_ARGUMENTS);
+    ts_module_call_function(ts_module_from_object(self), 0, NULL, NULL);
   TS_CATCH(rt,err)
     do {
       TS_DEF_ARGUMENTS(1);
@@ -79,11 +81,6 @@ static int _func_impl_outter_func(ts_object_t* self, ts_argument_t args, ts_retu
     ts_std_console_log(rt, TS_ARGUMENTS);
   TS_TRY_END
   
-    TS_DEF_ARGUMENTS(1);
-    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "=== outter do ===="));
-    ts_std_console_log(rt, TS_ARGUMENTS);
-    ts_module_call_function(ts_module_from_object(self), 0, NULL, NULL);
-  TS_TRY_REAL_END
 #else
   TS_TRY_BEGIN(rt)
     TS_DEF_ARGUMENTS(1);
