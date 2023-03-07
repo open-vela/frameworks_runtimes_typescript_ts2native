@@ -1,7 +1,7 @@
 
 #include "ts_runtime.h"
 #include "ts_package.h"
-#include "ts_exception.h"
+#include "ts_exception.hpp"
 #include "ts_std.h"
 
 #ifdef TEST
@@ -12,10 +12,18 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef TOWASM
 #include <dlfcn.h>
 #include <sys/timerfd.h>
+#endif
 #include <time.h>
 #include <poll.h>
+
+#ifdef TOWASM
+#include "ts_built_in_modules.h"
+extern "C" int timerfd_create_inwamr();
+extern "C" int timerfd_settime_inwamr(int fd,uint64_t min_timeout);
+#endif
 
 ///////////////////////////////////////////////////////////////////////////
 #define TASK_BUFFER  256
@@ -40,6 +48,8 @@ typedef struct _message_loop_t {
   task_t task_buffer[TASK_BUFFER];
 } message_loop_t;
 
+extern "C"
+{
 
 static uint64_t get_now_us() {
   struct timespec ts;
@@ -83,10 +93,14 @@ static void update_loop_timeout(message_loop_t* loop) {
 
   if (min_timeout < loop->last_timeout) {
     loop->last_timeout = min_timeout;
+    #ifdef TOWASM
+    timerfd_settime_inwamr(loop->loop_fd, min_timeout);
+    #else
     struct itimerspec spec = {};
     spec.it_value.tv_sec = min_timeout / 1000000;
     spec.it_value.tv_nsec = (min_timeout % 1000000) * 1000;
     timerfd_settime(loop->loop_fd, TFD_TIMER_ABSTIME, &spec, NULL);
+    #endif
   }
 }
 
@@ -200,7 +214,11 @@ static void set_loop_next_timeout(uint64_t timeout_ms, void* data) {
 
 message_loop_t* create_message_loop(ts_runtime_t* rt) {
   message_loop_t* loop = (message_loop_t*)malloc(sizeof(message_loop_t));
+#ifdef TOWASM
+  loop->loop_fd = timerfd_create_inwamr();
+#else
   loop->loop_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+#endif
 
   loop->runtime = rt;
   loop->last_timeout = (uint64_t)-1;
@@ -230,6 +248,33 @@ int main(int argc, const char* argv[]) {
 
 
   ts_runtime_t* rt = ts_runtime_create(argc, argv);
+#ifdef TOWASM
+  TS_TRY_BEGIN(rt)
+  TS_CATCH(rt,err)
+    TS_DEF_ARGUMENTS(2);
+    TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "TS Error:"));
+    TS_SET_OBJECT_ARG(err);
+    ts_std_console_log(rt, TS_ARGUMENTS);
+  TS_TRY_END
+  ts_module_t* m = ts_try_load_module_from_built_in(rt, argv[1]);
+  if (m) {
+    TS_PUSH_LOCAL_SCOPE(rt, 1);
+    TS_SET_LOCAL_OBJECT(0, m);
+
+    message_loop_t* loop = create_message_loop(rt);
+
+    // call initialize
+    ts_module_initialize(m);
+    while(message_loop_has_more(loop)) {
+      run_loop(loop);
+    }
+
+    free_messasge_loop(loop);
+    TS_POP_LOCAL_SCOPE(rt);
+  }
+  TS_TRY_REAL_END
+
+#else 
 
   TS_TRY_BEGIN(rt)
     ts_module_t* m = ts_load_module(rt, argv[1], ts_module_no_package);
@@ -259,5 +304,8 @@ int main(int argc, const char* argv[]) {
     TS_SET_OBJECT_ARG(err);
     ts_std_console_log(rt, TS_ARGUMENTS);
   TS_TRY_END
+#endif
   ts_runtime_destroy(rt);
+}
+
 }

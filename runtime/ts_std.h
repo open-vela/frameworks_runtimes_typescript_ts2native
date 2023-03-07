@@ -44,24 +44,24 @@ inline static ts_boolean_t ts_object_is_std_object(ts_object_t* obj, ts_std_obje
 }
 
 inline static ts_boolean_t ts_object_is_console(ts_object_t* obj) {
-  return ts_object_is_std_object(obj, lang_class_max + ts_std_console_index);
+  return ts_object_is_std_object(obj, (ts_std_object_index_t)(lang_class_max + ts_std_console_index));
 }
 
 inline static ts_boolean_t ts_object_is_promise(ts_object_t* obj) {
-  return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_index);
+  return ts_object_is_std_object(obj, (ts_std_object_index_t)(lang_class_max + ts_std_promise_index));
 }
 
 inline static ts_boolean_t ts_object_is_promise_awaiter(ts_object_t* obj) {
-  return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_awaiter_index);
+  return ts_object_is_std_object(obj, (ts_std_object_index_t)(lang_class_max + ts_std_promise_awaiter_index));
 }
 
 
 inline static ts_boolean_t ts_object_is_resolver(ts_object_t* obj) {
-  return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_resolver_index);
+  return ts_object_is_std_object(obj, (ts_std_object_index_t)(lang_class_max + ts_std_promise_resolver_index));
 }
 
 inline static ts_boolean_t ts_object_is_rejecter(ts_object_t* obj) {
-  return ts_object_is_std_object(obj, lang_class_max + ts_std_promise_rejecter_index);
+  return ts_object_is_std_object(obj, (ts_std_object_index_t)(lang_class_max + ts_std_promise_rejecter_index));
 }
 
 ///////////////////////////////////////////////////////////////////
