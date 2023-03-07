@@ -1,12 +1,16 @@
 
 #include <unistd.h>
 #include <string.h>
-#include <sys/mman.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+
+#ifndef TOWASM
+#include <sys/mman.h>
 #include <dlfcn.h>
+#endif
 
 #include <stdlib.h>
 
@@ -36,6 +40,10 @@ static void ts_remap_vtables(ts_vtable_pkg_t* mod_pkg_vt) {
 }
 
 static ts_module_t* ts_load_module_from_package(ts_runtime_t* rt, const char* path) {
+
+#ifdef TOWASM
+  return NULL;
+#else
 
   int fd = open(path, O_RDONLY);
 
@@ -71,9 +79,14 @@ static ts_module_t* ts_load_module_from_package(ts_runtime_t* rt, const char* pa
   module->package = (void*)((uintptr_t)(ptr) | 1);
   close(fd);
   return module;
+#endif
 }
 
 static ts_module_t* ts_load_module_from_library(ts_runtime_t* rt, const char* path) {
+
+#ifdef TOWASM
+  return NULL;
+#else
   void* handle = dlopen(path, RTLD_LAZY); 
 
   if (handle == NULL) {
@@ -115,6 +128,7 @@ static ts_module_t* ts_load_module_from_library(ts_runtime_t* rt, const char* pa
   m->package = handle;
 
   return m;
+#endif
 }
 
 static const char* search_paths[] = {

@@ -4,6 +4,8 @@
 #include "ts_common.h"
 #include "ts_runtime.h"
 
+TS_CPP_BEGIN
+
 #define V(url) \
     TS_EXTERN ts_module_t* _##url##_module(ts_runtime_t* runtime);
 
@@ -31,5 +33,7 @@ typedef struct {
 } ts_built_in_module_t;
 
 ts_module_t* ts_try_load_module_from_built_in(ts_runtime_t* rt, const char* path);
+
+TS_CPP_END
 
 #endif  // TS_BUILT_IN_MODULES_H_

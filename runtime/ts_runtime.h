@@ -551,7 +551,7 @@ inline static ts_object_t* ts_reset_object_add_ref(ts_object_t** dst, ts_object_
 }
 
 inline static ts_object_base_type_t ts_object_base_type(ts_object_t* obj) {
-  return OBJECT_VTABLE(obj)->base_type;
+  return (ts_object_base_type_t)(OBJECT_VTABLE(obj)->base_type);
 }
 
 inline static ts_boolean_t ts_object_is_module(ts_object_t* obj) {
@@ -622,7 +622,7 @@ inline static int ts_function_call(ts_object_t* self, ts_argument_t args, ts_ret
 }
 
 inline static ts_value_type_t ts_function_return_type(ts_object_t* self) {
-  return self ? OBJECT_VTABLE(self)->function_return_type : ts_value_void;
+  return self ? (ts_value_type_t)(OBJECT_VTABLE(self)->function_return_type) : (ts_value_type_t)ts_value_void;
 }
 //////////////////////////////////////////
 // GC Functions
