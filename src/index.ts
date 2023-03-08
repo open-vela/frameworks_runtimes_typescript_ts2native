@@ -111,5 +111,6 @@ compile(command_options, process.argv[process.argv.length-1], {
   noImplicitAny: true,
   target: ts.ScriptTarget.ES5,
   module: ts.ModuleKind.CommonJS,
+  allowJs: true,
   noEmit: true,
 });
