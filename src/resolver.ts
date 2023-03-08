@@ -1190,7 +1190,7 @@ class CompilerContext extends ContextBase {
 		SemanticsType.kBranchBlock,
 		SemanticsType.kFunction,
 		SemanticsType.kMethod]);
-	ts.forEachChild(n,  (node) => this.compileFunctionStatement(n));
+	ts.forEachChild(n,  (node) => this.compileFunctionStatement(node));
         break;
       }
       case ts.SyntaxKind.ExpressionStatement: {
