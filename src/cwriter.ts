@@ -41,17 +41,26 @@ import {
   FunctionValue,
   FunctionCallValue,
   BinaryOpValue,
-  PropertyAccessValue
+  PropertyAccessValue,
+  ReturnValue,
+  StroageValue
 } from './resolver';
 
-function GetValueStorage(value: VarValue|FunctionValue|ParameterValue, need_subvalue: boolean = true) : string {
+function GetValueStorage(value: StroageValue) : string {
   let storage = '';
   switch(value.storage) {
     case StorageScope.kGlobal:
       storage = '__rt->std_module->values';
       break;
     case StorageScope.kModule:
-      storage = '__module->values';
+      switch(value.kind) {
+        case ValueKind.kFunction:
+          storage = '__module->functions';
+	  break;
+	case ValueKind.kVar:
+          storage = '__module->values';
+	  break;
+      }
       break;
     case StorageScope.kParameter:
       storage = '__params';
@@ -66,29 +75,51 @@ function GetValueStorage(value: VarValue|FunctionValue|ParameterValue, need_subv
       storage = 'ts_closure_data(self)';
       break;
     case StorageScope.kReturn:
-      return '(*__ret)';
+      storage = '__ret';
+      break;
   }
+  return `${storage}[${value.index}]`;
+}
 
+function GetFunctionObject(v: StroageValue) : string {
+  let s = GetValueStorage(v);
+  if (v.kind == ValueKind.kFunction &&
+       (v.storage == StorageScope.kModule || v.storage == StorageScope.kGlobal)) {
+    return s;
+  }
+  return `${s}.object`;
+}
+
+const ValueKindsHasSubType = [ValueKind.kVar, ValueKind.kParameter, ValueKind.kReturn];
+
+function GetSubValueFromKind(kind: ValueTypeKind) : string {
   let subvalue = '';
+  switch(kind) {
+    case ValueTypeKind.kInt:
+      subvalue = '.ival';
+      break;
+    case ValueTypeKind.kNumber:
+      subvalue = '.dval';
+      break;
+    case ValueTypeKind.kBoolean:
+      subvalue = '.ival';
+      break;
+    case ValueTypeKind.kAny:
+      subvalue = '/*Any*/';
+      break;
+    default:
+      subvalue = '.object';
+      break;
+  }
+  return subvalue;
+}
 
-  if (need_subvalue) {
-    switch(value.type.kind) {
-      case ValueTypeKind.kInt:
-        subvalue = '.ival';
-        break;
-      case ValueTypeKind.kNumber:
-        subvalue = '.dval';
-        break;
-      case ValueTypeKind.kBoolean:
-        subvalue = '.ival';
-        break;
-      default:
-        subvalue = '.object';
-        break;
-    }
+function GetValueSubValue(value: Value) : string {
+  if (ValueKindsHasSubType.indexOf(value.kind) < 0) {
+    return `/*kind:${ValueKind[value.kind]}*/`; // don't change any
   }
 
-  return `${storage}[${value.index}]${subvalue}`;
+  return GetSubValueFromKind(value.type.kind);
 }
 
 function EscapeString(s: string) : string {
@@ -103,11 +134,17 @@ function CastTo(to: Value, from: Value, code: string) : string {
   switch(to.type.kind) {
     case ValueTypeKind.kInt:
       switch(from.type.kind) {
-        case ValueTypeKind.kNumber: return `(int)(${code})`;
-	case ValueTypeKind.kBoolean: return code;
-	case ValueTypeKind.kAny:
+        case ValueTypeKind.kNumber: return `(int)(${code}${GetValueSubValue(from)})`;
+	case ValueTypeKind.kBoolean: return `${code}${GetValueSubValue(from)}`;
+	case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
+	case ValueTypeKind.kString:
+	  if (from.kind == ValueKind.kLiteral) return `atoi(${code})`;
+	  //fall through
+	case ValueTypeKind.kArray:
+	case ValueTypeKind.kMap:
+	case ValueTypeKind.kSet:
 	case ValueTypeKind.kObject: {
-          return `ts_object_to_int(${code}, 0)` 
+          return `ts_object_to_int(${code}.object, 0)` 
 	}
 	default:
 	  return code;
@@ -115,60 +152,86 @@ function CastTo(to: Value, from: Value, code: string) : string {
       break;
     case ValueTypeKind.kNumber: 
       switch(from.type.kind) {
-        case ValueTypeKind.kInt: return `(double)(${code})`;
-	case ValueTypeKind.kBoolean: return `(double)((${code} == 0 ? 0 : 1.0))`;
-	case ValueTypeKind.kAny:
+        case ValueTypeKind.kInt: return `(double)(${code}${GetValueSubValue(from)})`;
+        case ValueTypeKind.kNumber: return `${code}${GetValueSubValue(from)}`;
+	case ValueTypeKind.kBoolean: return `(double)((${code}${GetValueSubValue(from)} == 0 ? 0 : 1.0))`;
+	case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
+	case ValueTypeKind.kString:
+          if (from.kind == ValueKind.kLiteral) return `strtod(${code}, NULL)`;
+	case ValueTypeKind.kArray:
+	case ValueTypeKind.kMap:
+	case ValueTypeKind.kSet:
         case ValueTypeKind.kObject: {
-          return `ts_object_to_number(${code}, 0.0)`;
+          return `ts_object_to_number(${code}.object, 0.0)`;
 	}
       } 
       break;
     case ValueTypeKind.kString:
       if (from.kind == ValueKind.kLiteral) {
-        return `TS_STRING_NEW_STACK(__rt, ${code})`
-      } else
-        return code;
+	if (from.type.kind == ValueTypeKind.kString)
+          return `TS_STRING_NEW_STACK(__rt, ${code})`
+        else
+          return `TS_STRING_NEW_STACK(__rt, "${EscapeString(code)}")`
+      }
+      switch(from.type.kind) {
+        case ValueTypeKind.kInt: return `ts_string_from_int(__rt, ${code}.ival)`;
+	case ValueTypeKind.kNumber: return `ts_string_from_double(__rt, ${code}.dval})`;
+	case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival})`;
+	case ValueTypeKind.kString:
+	case ValueTypeKind.kAny: return `${code}.object`;
+	default: return `ts_object_to_string(${code}.object)`;
+      }
       break;
+    case ValueTypeKind.kAny:
     case ValueTypeKind.kArray:
     case ValueTypeKind.kMap:
     case ValueTypeKind.kSet:
     case ValueTypeKind.kObject:
      switch(from.type.kind) {
-       case ValueTypeKind.kInt: return `TS_INT32_NEW_STACK(__rt, ${code})`;
-       case ValueTypeKind.kNumber: return `TS_DOUBLE_NEW_STACK(__rt, ${code})`;
-       case ValueTypeKind.kString: return `TS_STRING_NEW_STACK(__rt, ${code})`;
-       case ValueTypeKind.kBoolean: return `TS_BOOLEAN_NEW_STACK(__rt, ${code})`;
-       default: return code;
+       case ValueTypeKind.kInt: return `TS_INT32_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
+       case ValueTypeKind.kNumber: return `TS_DOUBLE_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
+       case ValueTypeKind.kString: return `TS_STRING_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
+       case ValueTypeKind.kBoolean: return `TS_BOOLEAN_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
+       default: return `${code}.object`;
      }
      break;
   }
-  return code;
+  return `${code}${GetValueSubValue(from)}`;
+}
+
+function GetLeftValueSubValue(left: Value, right: Value) {
+  if (left.type.kind == ValueTypeKind.kAny) {
+    //return GetSubValueFromKind(right.type.kind);
+    return '.object';
+  }
+
+  return GetValueSubValue(left);
 }
 
 function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, right_value: Value, right: string) : string {
   switch(op) {
     case ts.SyntaxKind.EqualsToken:
-      return `${left} = ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)} = ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.PlusEqualsToken:
-      return `${left} += ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  += ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.MinusEqualsToken:
-      return `${left} -= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  -= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.AsteriskAsteriskEqualsToken:
-      return `squareTo(&(${left}), ${right})`;
+      return `squareTo(&(${left}${GetLeftValueSubValue(left_value, right_value)} ), ${right})`;
     case ts.SyntaxKind.AsteriskEqualsToken:
-      return `${left} *= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  *= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.SlashEqualsToken:
-      return `${left} /= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  /= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.PercentEqualsToken:
-      return `${left} %= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  %= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.AmpersandEqualsToken:
-      return `${left} &= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  &= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.BarEqualsToken:
-      return `${left} |= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  |= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.CaretEqualsToken:
-      return `${left} ^= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  ^= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.LessThanLessThanEqualsToken:
-      return `${left} <<= ${CastTo(left_value, right_value, right)}`;
+      return `${left}${GetLeftValueSubValue(left_value, right_value)}  <<= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken:
       return '>>>=';
     case ts.SyntaxKind.GreaterThanGreaterThanEqualsToken:
@@ -176,21 +239,21 @@ function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, r
     case ts.SyntaxKind.AsteriskAsteriskToken:
       return '**';
     case ts.SyntaxKind.AsteriskToken:
-      return `${left} * ${right}`;
+      return `${left}${GetValueSubValue(left_value)} * ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.SlashToken:
-      return `${left} / ${right}`;
+      return `${left}${GetValueSubValue(left_value)} / ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.PercentToken:
-      return `${left} % ${right}`;
+      return `${left}${GetValueSubValue(left_value)}  % ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.PlusToken:
-      return `${left} + ${right}`;
+      return `${left}${GetValueSubValue(left_value)}  + ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.MinusToken:
-      return `${left} - ${right}`;
+      return `${left}${GetValueSubValue(left_value)}  - ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.CommaToken:
-      return `${left}, ${right}`;
+      return `${left}${GetValueSubValue(left_value)} , ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.LessThanLessThanToken:
-      return `${left} << ${right}`;
+      return `${left}${GetValueSubValue(left_value)}  << ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.GreaterThanGreaterThanToken:
-      return `${left} >> ${right}`;
+      return `${left}${GetValueSubValue(left_value)}  >> ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
       return '<<<';
     case ts.SyntaxKind.LessThanToken:
@@ -325,7 +388,8 @@ export class CCodeWriter implements Writer {
       this.writeValue(v);
     }
 
-    this.addSource(`  return 0;\n`);
+    if (values.length > 0 && values[values.length-1].kind != ValueKind.kReturn)
+      this.addSource(`  return 0;\n`);
     this.addSource(`}\n`);
   }
 
@@ -345,6 +409,8 @@ export class CCodeWriter implements Writer {
 	return this.buildCallValue(value as FunctionCallValue);
       case ValueKind.kParameter:
         return this.buildParameterValue(value as ParameterValue);
+      case ValueKind.kReturn:
+	return `return ${(value as ReturnValue).retCode}`;
       //case ValueKind.kPropertyAccess:
       //  return this.buildPropertyAccessValue(value as PropertyAccessValue);
     }
@@ -373,13 +439,13 @@ export class CCodeWriter implements Writer {
   buildCallValue(v: FunctionCallValue) : string {
     let call_str = '';
     if (v.self.kind == ValueKind.kFunction) {
-      call_str = `ts_function_call(${GetValueStorage(v.self as FunctionValue)}`;
+      call_str = `ts_function_call(${GetFunctionObject(v.self as FunctionValue)}`;
     } else if (v.self.kind == ValueKind.kPropertyAccess) {
       const p = v.self as PropertyAccessValue;
-      call_str = `ts_method_call(${GetValueStorage(p.thiz as VarValue)}, ts_method_last + ${p.member.index}`;
+      call_str = `ts_method_call(${GetFunctionObject(p.thiz as VarValue)}, ts_method_last + ${p.member.index}`;
     }
 
-    return `${call_str}, &__temporary[${v.param_start}], &${GetValueStorage(v.ret as VarValue, false)})`;
+    return `${call_str}, &__temporary[${v.param_start}], &${GetValueStorage(v.ret as VarValue)})`;
   }
 
   buildParameterValue(v: ParameterValue) : string {
@@ -408,7 +474,7 @@ export class CCodeWriter implements Writer {
     this.addSource(`        ts_object_function,\n`)
     this.addSource(`        ${GetFunctionReturnType(f)},\n`);
     this.addSource(`        ${f.closureDatas.length},\n`);
-    this.addSource(`        ${MakeFunctionConstructor(f)}, /*constructor*/,\n`);
+    this.addSource(`        ${MakeFunctionConstructor(f)}, /*constructor*/\n`);
     this.addSource(`        ${MakeFunctionDestroy(f)}, /*destroy*/\n`);
     this.addSource(`        ${MakeFunctionGCVisitor(f)} /*gc_vsisitor*/\n`)
     this.addSource(`  );\n`);
