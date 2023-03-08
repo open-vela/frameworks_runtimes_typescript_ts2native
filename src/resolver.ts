@@ -113,7 +113,8 @@ export enum ValueKind {
   kCall,
   kParameter,
   kFunction,
-  kPropertyAccess
+  kPropertyAccess,
+  kReturn,
 }
 
 export class Value {
@@ -233,6 +234,13 @@ export class BinaryOpValue extends Value {
   }
 }
 
+export class ReturnValue extends Value {
+  retCode: number = 0;
+  constructor() {
+    super(ValueKind.kReturn, PrimitiveValueType.Void);
+  }
+}
+
 function GetMemberValueType(m: MemberNode) : ValueType {
   if (m.kind == SemanticsType.kMethod)
     return (m as MethodNode).returnValueType;
@@ -250,6 +258,7 @@ export class PropertyAccessValue extends Value {
   }
 }
 
+export type StroageValue = VarValue | FunctionValue | ParameterValue;
 
 const kCustroumerMemberStart = 4;
 
@@ -342,7 +351,7 @@ export class SemanticsNode {
 export class BlockLikeNode extends SemanticsNode {
   locals: VarNode[] = [];
 
-  subBlocks: BlockLikeNode[];
+  subBlocks: BlockLikeNode[] = [];
 
   constructor(kind: SemanticsType.kBlock | SemanticsType.kBranchBlock, astNode: ts.Node) {
     super(kind, astNode);
@@ -851,6 +860,21 @@ class ContextBase {
     return undefined;
   }
 
+  getNode(kinds: SemanticsType[]) : SemanticsNode | undefined {
+    for (let i = this.stacks.length - 1; i >= 0; i --) {
+      if (kinds.indexOf(this.stacks[i].kind) >= 0) {
+        return this.stacks[i];
+      }
+    }
+    return undefined;
+  }
+
+  getCurrentFunctionReturnType() : ValueType {
+    const node = this.getNode([SemanticsType.kMethod, SemanticsType.kFunction, SemanticsType.kConstructor]);
+    if (!node) return PrimitiveValueType.Void;
+    return (node as FunctionLikeNode).returnValueType;
+  }
+
   createVarValue(v: ClosureableDataNode, index: number) {
     const parent = v.parent;
     if (parent.kind == SemanticsType.kModule) {
@@ -887,7 +911,7 @@ class ContextBase {
     } else if (v.kind == SemanticsType.kVar) {
       return new VarValue(v.type, StorageScope.kLocal, v.index);
     } else if (v.kind == SemanticsType.kParamter) {
-      return new VarValue(v.type, StorageScope.kParameter, v.index);
+      return new VarValue(v.type, StorageScope.kParameter, v.index + 1); // parameter start from 1
     }
 
     return new NoneValue();
@@ -1116,12 +1140,12 @@ class CompilerContext extends ContextBase {
     return new VarValue(type, StorageScope.kTemporary, this.incTemporary());
   }
 
-  createParameterCountValue(count: number) : VarValue {
+  createParameterCountValue(count: number) : ParameterValue {
     return this.createParameterValue(PrimitiveValueType.Int,
 				     new LiterialValue(PrimitiveValueType.Int, count));
   }
 
-  createParameterValue(type: ValueType, value: Value) : VarValue {
+  createParameterValue(type: ValueType, value: Value) : ParameterValue {
     return new ParameterValue(type, this.incTemporary(), value);
   }
 
@@ -1207,6 +1231,9 @@ class CompilerContext extends ContextBase {
 	this.compileVariableStatement((n as ts.VariableStatement));
         break;
       }
+      case ts.SyntaxKind.ReturnStatement:
+	this.compileReturnStatement((n as ts.ReturnStatement));
+        break;
     }
   }
 
@@ -1238,6 +1265,21 @@ class CompilerContext extends ContextBase {
       this.addTo(vnode, [SemanticsType.kBlock]);
       value.index = vnode.index;
     }
+  }
+
+  compileReturnStatement(retNode: ts.ReturnStatement) {
+    if (retNode.expression) {
+      const kind = retNode.expression.kind;
+      let retValue = new VarValue(this.getCurrentFunctionReturnType(), StorageScope.kReturn, 0);
+      if (kind == ts.SyntaxKind.CallExpression) {
+        this.compileCallExpression((retNode.expression as ts.CallExpression), retValue);
+      } else {
+        this.values.push(new BinaryOpValue(retValue,
+  				     ts.SyntaxKind.EqualsToken,
+				     this.compileExpression(retNode.expression)));
+      }
+    }
+    this.values.push(new ReturnValue());
   }
 
   compileExpression(expr: ts.Expression) : Value {
@@ -1325,9 +1367,20 @@ class CompilerContext extends ContextBase {
 
     for (const arg of expr.arguments) {
       const arg_value = this.compileExpression(arg);
-      const arg_target = this.createParameterValue(func.getParamterType(i), arg_value);
+      const type = func.getParamterType(i);
+      if (arg_value.kind == ValueKind.kVar && ((arg_value as VarValue).storage == StorageScope.kTemporary)) {
+        // in temporary
+	if (type.kind == arg_value.type.kind) {
+	  continue; // same type, use the return result directly
+	} else {
+	  // reuse the temporary
+	  this.cur_temporary --;
+	}
+      }
+      const arg_target = this.createParameterValue(type, arg_value);
       i++;
       this.values.push(arg_target);
+      //console.log(`parameter type ${ValueTypeKind[arg_target.type.kind]} value type: ${ValueTypeKind[arg_target.value.type.kind]}`);
     }
     this.subTemporary(expr.arguments.length + 1);
     this.values.push(new FunctionCallValue(funcValue, this.cur_temporary, ret_value));
