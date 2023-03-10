@@ -20,6 +20,7 @@ import {
   ClassNode,
   FunctionLikeNode,
   MethodNode,
+  FieldNode,
   FunctionNode,
   MemberNode,
   ModuleInitializeNode,
@@ -43,24 +44,30 @@ import {
   BinaryOpValue,
   PropertyAccessValue,
   ReturnValue,
-  StroageValue
+  StroageValue,
+  NewValue,
+  IsStroageValue,
 } from './resolver';
+
+function GetModuleValue(value: StroageValue) : string {
+  switch(value.kind) {
+    case ValueKind.kVar: return "values";
+    case ValueKind.kClass: return "classes";
+    case ValueKind.kFunction: return "functions";
+    case ValueKind.kInterface: return "interfaces";
+    case ValueKind.kEnumReflect: return "enums";
+  }
+  return '';
+}
 
 function GetValueStorage(value: StroageValue) : string {
   let storage = '';
   switch(value.storage) {
     case StorageScope.kGlobal:
-      storage = '__rt->std_module->values';
+      storage = `__rt->std_module->${GetModuleValue(value)}`;
       break;
     case StorageScope.kModule:
-      switch(value.kind) {
-        case ValueKind.kFunction:
-          storage = '__module->functions';
-	  break;
-	case ValueKind.kVar:
-          storage = '__module->values';
-	  break;
-      }
+      storage = `__module->${GetModuleValue(value)}`;
       break;
     case StorageScope.kParameter:
       storage = '__params';
@@ -90,6 +97,15 @@ function GetFunctionObject(v: StroageValue) : string {
   return `${s}.object`;
 }
 
+function GetObjectValue(v: Value) : string {
+  if (v.kind == ValueKind.kThis) return 'self';
+
+  if (IsStroageValue(v)) {
+    return `${GetValueStorage(v as VarValue)}.object`;
+  }
+  return '';
+}
+
 const ValueKindsHasSubType = [ValueKind.kVar, ValueKind.kParameter, ValueKind.kReturn];
 
 function GetSubValueFromKind(kind: ValueTypeKind) : string {
@@ -113,6 +129,25 @@ function GetSubValueFromKind(kind: ValueTypeKind) : string {
   }
   return subvalue;
 }
+
+function GetCTypeFromValueType(kind: ValueTypeKind) : string {
+  switch(kind) {
+    case ValueTypeKind.kInt:    return `int`;
+    case ValueTypeKind.kNumber: return 'double';
+    case ValueTypeKind.kBoolean: return 'ts_boolean_t';
+    case ValueTypeKind.kString:
+    case ValueTypeKind.kAny:
+    case ValueTypeKind.kObject:
+    case ValueTypeKind.kFunction:
+    case ValueTypeKind.kMap:
+    case ValueTypeKind.kSet:
+    case ValueTypeKind.kUnion:
+      return 'ts_object_t*';
+    default:
+      return 'void';
+  }
+}
+
 
 function GetValueSubValue(value: Value) : string {
   if (ValueKindsHasSubType.indexOf(value.kind) < 0) {
@@ -161,9 +196,10 @@ function CastTo(to: Value, from: Value, code: string) : string {
 	case ValueTypeKind.kArray:
 	case ValueTypeKind.kMap:
 	case ValueTypeKind.kSet:
-        case ValueTypeKind.kObject: {
-          return `ts_object_to_number(${code}.object, 0.0)`;
-	}
+        case ValueTypeKind.kObject:
+          if (IsStroageValue(from)) return `ts_object_to_number(${code}.object, 0.0)`;
+	default:
+          return code;
       } 
       break;
     case ValueTypeKind.kString:
@@ -179,7 +215,9 @@ function CastTo(to: Value, from: Value, code: string) : string {
 	case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival})`;
 	case ValueTypeKind.kString:
 	case ValueTypeKind.kAny: return `${code}.object`;
-	default: return `ts_object_to_string(${code}.object)`;
+	default:
+	  if (IsStroageValue(from)) return `ts_object_to_string(${code}.object)`;
+	  return `ts_object_to_string(${code})`;
       }
       break;
     case ValueTypeKind.kAny:
@@ -192,7 +230,9 @@ function CastTo(to: Value, from: Value, code: string) : string {
        case ValueTypeKind.kNumber: return `TS_DOUBLE_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
        case ValueTypeKind.kString: return `TS_STRING_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
        case ValueTypeKind.kBoolean: return `TS_BOOLEAN_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
-       default: return `${code}.object`;
+       default:
+         if (IsStroageValue(from)) return `${code}.object`;
+         return code;
      }
      break;
   }
@@ -346,6 +386,7 @@ function MakeFunctionGCVisitor(func: FunctionLikeNode) : string {
 
 export class CCodeWriter implements Writer {
   module: ModuleNode;
+  clazz?: ClassNode;
   outDir: string;
   fdSource: number = 0;
 
@@ -371,6 +412,10 @@ export class CCodeWriter implements Writer {
     this.addSource("#include <ts_lang.h>\n");
     this.addSource("#include <ts_std.h>\n");
   } 
+
+  setClass(c: ClassNode) {
+    this.clazz = c;
+  }
 
   writeFunction(func: FunctionLikeNode, values: Value[]) {
     this.addSource(`static int ${GetFunctionImplName(func)}(ts_object_t* self, ts_argument_t __params, ts_return_t __ret) {\n`);
@@ -411,14 +456,41 @@ export class CCodeWriter implements Writer {
         return this.buildParameterValue(value as ParameterValue);
       case ValueKind.kReturn:
 	return `return ${(value as ReturnValue).retCode}`;
-      //case ValueKind.kPropertyAccess:
-      //  return this.buildPropertyAccessValue(value as PropertyAccessValue);
+      case ValueKind.kThis:
+	return 'self';
+      case ValueKind.kNew:
+	return this.buildNew(value as NewValue);
+      case ValueKind.kPropertyAccess:
+        return this.buildPropertyAccessValue(value as PropertyAccessValue);
     }
     return '';
   }
 
   buildVarValue(v: VarValue) : string {
     return GetValueStorage(v);
+  }
+
+  buildNew(v: NewValue) : string {
+    return `ts_new_object(__rt, &${GetValueStorage(v.clazzValue)}, &__temporary[${v.param_start}])`;
+  }
+
+  buildPropertyAccessValue(v: PropertyAccessValue) : string {
+    const m = v.member;
+    if (m.kind == SemanticsType.kField) {
+      let member_offset = '';
+      const f = m as FieldNode;
+      console.log(`field: ${f.name} offset32: ${f.offset32}, offset64: ${f.offset64}`);
+      if (f.offset32 >= 0) {
+        // TODO get super size
+	const super_size = `sizeof(ts_object_t)`;
+        member_offset = `TS_OFFSET(void, ${GetObjectValue(v.thiz)}, ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64}))`
+      } else {
+        member_offset = `ts_field_of(${GetObjectValue(v.thiz)}, ${f.index})`;
+      }
+
+      return `(*((${GetCTypeFromValueType(f.type.kind)}*)${member_offset}))`;
+    }
+    return '';
   }
 
   buildLiteralValue(v: LiterialValue) : string {
@@ -481,7 +553,28 @@ export class CCodeWriter implements Writer {
   }
 
   writeClassDefine(c: ClassNode) {
-
+    const super_size = "sizeof(ts_object_t)"; // TODO super
+    this.addSource(`static TS_VTABLE_DEF(_${c.name}_vt, ${c.members.length}) = {\n`);
+    this.addSource(`  TS_VTABLE_SUPER_BASE(${super_size} + TS_SIZE_32_64(${c.fieldSize32}, ${c.fieldSize64}),\n`);
+    this.addSource(`      "${c.name}",\n`);
+    this.addSource(`      NULL/*TODO super*/,\n`);
+    this.addSource(`      0/*TODO interface_count*/,\n`);
+    this.addSource(`      TS_VTABLE_NEMBER_COUNT(_${c.name}_vt),\n`);
+    this.addSource(`      ${c.ctr ? GetFunctionImplName(c.ctr): "NULL"},\n`);
+    this.addSource(`      NULL/*TODO destroy*/,\n`);
+    this.addSource(`      NULL/*TODO to_str*/,\n`);
+    this.addSource(`      NULL/*TODO visitor*/),\n`);
+    this.addSource(`  {\n`);
+    for (const m of c.members) {
+      if (m.kind == SemanticsType.kMethod) {
+        this.addSource(`    {.method = (ts_call_t)(${GetFunctionImplName(m as MethodNode)})},\n`);
+      } else if (m.kind == SemanticsType.kField) {
+	const f = m as FieldNode;
+        this.addSource(`    {.field = ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64})},\n`);
+      }
+    }
+    this.addSource(`  }\n`);
+    this.addSource(`};\n`);
   }
 
   writeModuleDefine() {
