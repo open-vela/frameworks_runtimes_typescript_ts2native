@@ -15,6 +15,12 @@
 
 #define TS_OFFSET(T, p, offset) ((T*)((uint8_t*)(p) + (offset)))
 
+#ifdef __LP__
+#define TS_SIZE_32_64(s32, s64)   (s64)
+#else
+#define TS_SIZE_32_64(s32, s64)   (s32)
+#endif
+
 #define TS_EXPORT
 
 ////////// configs
