@@ -33,6 +33,7 @@ export enum ValueTypeKind {
   kMap,
   kSet,
   kUnion,
+  kDynamic
 }
 
 export interface ValueType {
@@ -80,6 +81,15 @@ export const PrimitiveValueType = {
   Boolean:      {kind: ValueTypeKind.kBoolean},
   String:       {kind: ValueTypeKind.kString},
   Any:          {kind: ValueTypeKind.kAny},
+  Dynamic:      {kind: ValueTypeKind.kDynamic},
+}
+
+export const IntStringUnion : UnionValueType = {
+  kind: ValueTypeKind.kUnion,
+  types: [
+    PrimitiveValueType.Int,
+    PrimitiveValueType.String
+  ]
 }
 
 export const VoidOrAnyValueType: UnionValueType = {kind: ValueTypeKind.kUnion, types: [ PrimitiveValueType.Void,  PrimitiveValueType.Any]};
@@ -133,7 +143,8 @@ export enum ValueKind {
   kFunction,
   kClass,
   kInterface,
-  kEnumReflect,
+  kEnum,
+  kElementAccess,
   kNew,
   kPropertyAccess,
   kReturn,
@@ -227,6 +238,19 @@ export class FunctionValue extends Value {
   }
 }
 
+export class EnumValue extends Value {
+  storage: StorageScope;
+  index: number;
+  enumNode: EnumNode;
+
+  constructor(en: EnumNode, storage: StorageScope) {
+    super(ValueKind.kEnum, en.type);
+    this.enumNode = en;
+    this.storage = storage;
+    this.index = en.index;
+  }
+}
+
 type FunctionLikeCallKind = ValueKind.kCall | ValueKind.kNew;
 
 export class FunctionLikeCallValue extends Value {
@@ -314,26 +338,54 @@ export function IsLeftValue(value: Value) {
 	|| value.kind == ValueKind.kPropertyAccess;
 }
 
-function GetMemberValueType(m: MemberNode) : ValueType {
+function GetMemberValueType(m: MemberNode | EnumMemberNode) : ValueType {
   if (m.kind == SemanticsType.kMethod)
     return (m as MethodNode).returnValueType;
   else if (m.kind == SemanticsType.kField)
     return (m as FieldNode).type;
+  else if (m.kind == SemanticsType.kEnumMember) {
+    const em = m as EnumMemberNode;
+    if (typeof em.value == 'number')
+      return PrimitiveValueType.Int;
+    return PrimitiveValueType.String;
+  }
   return PrimitiveValueType.Void;
 }
 
 export class PropertyAccessValue extends Value {
   thiz: Value;
-  member: MemberNode; 
+  member: MemberNode | EnumMemberNode; 
   
-  constructor(thiz: Value, member: MemberNode) {
+  constructor(thiz: Value, member: MemberNode|EnumMemberNode) {
     super(ValueKind.kPropertyAccess, GetMemberValueType(member));
     this.thiz = thiz;
     this.member = member;
   }
 }
 
-export type StroageValue = VarValue | FunctionValue | ParameterValue | ClassValue;
+
+function GetElementAccessType(el: Value, arg: Value) : ValueType {
+  if (el.kind == ValueKind.kEnum) {
+    return PrimitiveValueType.String;
+  }
+
+  // TODO
+
+  return PrimitiveValueType.Dynamic;
+}
+
+export class ElementAccessValue extends Value {
+  element: Value;
+  argument: Value;
+
+  constructor(el: Value, arg: Value) {
+    super(ValueKind.kElementAccess, GetElementAccessType(el, arg));
+    this.element = el;
+    this.argument = arg;
+  }
+}
+
+export type StroageValue = VarValue | FunctionValue | ParameterValue | ClassValue | EnumValue;
 export function IsStroageValue(v: Value) : boolean {
   return v.kind == ValueKind.kVar
        || v.kind == ValueKind.kClass
@@ -373,6 +425,7 @@ export enum SemanticsType {
   kClass,
   kInterface,
   kEnum,
+  kEnumMember,
   kParamter,
   kFunction,
   kMethod,
@@ -388,6 +441,7 @@ export enum SemanticsType {
 function isVarValue(kind: SemanticsType) : boolean {
   return kind == SemanticsType.kVar
        || kind == SemanticsType.kParamter
+       || kind == SemanticsType.kEnum
        || kind == SemanticsType.kFunction;
 }
 
@@ -547,6 +601,59 @@ class ClosureDataNode extends NamedNode {
   dump(writer: DumpWriter) {
     writer.writeLine(`ClosuerData ${this.name}@${this.index} ${ValueTypeToString(this.type)}`);
   } 
+}
+
+export class EnumMemberNode extends NamedNode {
+  value: string | number;
+  constructor(name: string, value: string | number, node: ts.Node) {
+    super(SemanticsType.kEnumMember, name, node);
+    this. value = value; 
+  }
+}
+
+export class EnumNode extends NamedNode {
+  type: ValueType = PrimitiveValueType.Undefined;
+  members: EnumMemberNode[] = [];
+  constructor(name: string, node: ts.Node) {
+    super(SemanticsType.kEnum, name, node);
+  }
+
+  add(n: SemanticsNode) {
+    if (n.kind == SemanticsType.kEnumMember) {
+      n.parent = this;
+      n.index = this.members.length;
+      this.members.push(n as EnumMemberNode);
+      const mn = n as EnumMemberNode;
+      if (typeof mn.value == 'string') {
+        if (this.type.kind == ValueTypeKind.kUndefined) {
+          this.type = PrimitiveValueType.String;
+	} else if (this.type.kind == ValueTypeKind.kInt) {
+          this.type = IntStringUnion;
+	}
+      } else {
+        if (this.type.kind == ValueTypeKind.kUndefined) {
+          this.type = PrimitiveValueType.Int;
+	} else if (this.type.kind == ValueTypeKind.kString) {
+          this.type = IntStringUnion;
+	}
+      }
+    }
+  }
+
+  find(name: string) : SemanticsNode | undefined {
+    for (const m of this.members) {
+      if (m.name == name)
+        return m;
+    }
+    return undefined;
+  }
+
+  dump(writer: DumpWriter) {
+    writer.writeLine(`Enum ${this.name}@${this.index}`);
+    for (const m of this.members) {
+      writer.writeLine(`  ${m.name} = ${m.value}`);
+    }
+  }
 }
 
 type FunctionLikeNodeType = SemanticsType.kFunction|SemanticsType.kMethod|SemanticsType.kConstructor | SemanticsType.kModuleInitializer;
@@ -832,6 +939,7 @@ export class ModuleLikeNode extends NamedNode {
   functions: FunctionNode[] = [];
   // interfaces
   vars: VarNode[] = [];
+  enums: EnumNode[] = [];
 
   initialize: ModuleInitializeNode;
 
@@ -858,6 +966,8 @@ export class ModuleLikeNode extends NamedNode {
       case SemanticsType.kVar:
 	this.addTo(this.vars, n);
         break;
+      case SemanticsType.kEnum:
+	this.addTo(this.enums, n);
       default:
 	// TODO ERROR
 	break;
@@ -881,7 +991,9 @@ export class ModuleLikeNode extends NamedNode {
   find(name: string) : SemanticsNode | undefined {
     return this.findFrom(name, this.vars)
           || this.findFrom(name, this.functions)
-	  || this.findFrom(name, this.classes);
+	  || this.findFrom(name, this.classes)
+	  || this.findFrom(name, this.enums)
+	  ;
   }
 
   updateVarNodes() {
@@ -912,6 +1024,8 @@ export class ModuleLikeNode extends NamedNode {
       f.dump(writer);
     for (const v of this.vars)
       v.dump(writer);
+    for (const e of this.enums)
+      e.dump(writer);
     writer.unshift();
   }
 }
@@ -1011,6 +1125,11 @@ class ContextBase {
           // TODO
 	}
         return new FunctionValue(node as FunctionNode, storage, node.index);
+      }
+      case SemanticsType.kEnum: {
+        return new EnumValue(node as EnumNode, 
+                   node.parent.kind == SemanticsType.kModule ?
+			StorageScope.kModule : StorageScope.kGlobal);
       }
     }
     console.error(`resolve "${name}" unknown type ${SemanticsType[node.kind]}`);
@@ -1257,6 +1376,9 @@ class BuildSemanticsContext extends ContextBase {
       case ts.SyntaxKind.VariableStatement:
 	this.buildVariableStatement(node as ts.VariableStatement);
 	break;
+      case ts.SyntaxKind.EnumDeclaration:
+	this.buildEnumDeclaration(node as ts.EnumDeclaration);
+        break;
       }
     })
 
@@ -1281,6 +1403,39 @@ class BuildSemanticsContext extends ContextBase {
       }
       this.pop();
     });
+  }
+
+  buildEnumMemberValue(expr: ts.Expression) : string | number | undefined {
+    switch(expr.kind) {
+      case ts.SyntaxKind.NumericLiteral:
+	return parseInt((expr as ts.NumericLiteral).text);
+        break;
+      case ts.SyntaxKind.StringLiteral:
+        return (expr as ts.StringLiteral).text;	
+    }
+    return undefined;
+  }
+
+  buildEnumDeclaration(e: ts.EnumDeclaration) {
+    const enum_node = new EnumNode(e.name.text, e);
+
+    let start : number = 0;
+    for (const m of e.members) {
+      let value : number | string | undefined = start;
+      if (m.initializer) {
+        value = this.buildEnumMemberValue(m.initializer);
+	if (!value) {
+          value = start ++;
+	} else if (typeof value == 'number') {
+          start = (value as number) + 1;
+	}
+      } else {
+        value = start ++;
+      }
+      const enum_member = new EnumMemberNode((m.name as ts.Identifier).text, value, m);
+      enum_node.add(enum_member);
+    }
+    this.addToModule(enum_node);
   }
 
   buildClassLikeMember(m: ts.ClassElement) {
@@ -1642,6 +1797,8 @@ class CompilerContext extends ContextBase {
 	return this.resolveThis();
       case ts.SyntaxKind.NewExpression:
 	return this.compileNewExpression(expr as ts.NewExpression);
+      case ts.SyntaxKind.ElementAccessExpression:
+	return this.compileElementAccessExpression(expr as ts.ElementAccessExpression);
       default:
 	console.error(`unknown the expresstion: ${nodeToString(expr)}`);
     }
@@ -1650,9 +1807,14 @@ class CompilerContext extends ContextBase {
 
   compilePropertyAccessExpression(expr: ts.PropertyAccessExpression) : Value {
     const thiz_value = this.compileExpression(expr.expression); 
-    if (thiz_value.type.kind == ValueTypeKind.kObject) {
-      const name = (expr.name as ts.Identifier).text;
+    const name = (expr.name as ts.Identifier).text;
+    if (thiz_value.kind == ValueKind.kEnum) {
+      const enum_value = thiz_value as EnumValue;
+      const m = enum_value.enumNode.find(name);
+      return new PropertyAccessValue(thiz_value, m as EnumMemberNode);
+    } else if (thiz_value.type.kind == ValueTypeKind.kObject) {
       const m = (thiz_value.type as ObjectValueType).clazz.find(name);
+
       if (!m) {
 	 // TODO
 	 console.error(`cannot resolve the ${name}`);
@@ -1661,13 +1823,19 @@ class CompilerContext extends ContextBase {
 
       if (m.kind == SemanticsType.kMethod)
         return new PropertyAccessValue(thiz_value, m as MethodNode);
-      else if (m.kind == SemanticsType.kField) {
+      else if (m.kind == SemanticsType.kField)
 	return new PropertyAccessValue(thiz_value, m as FieldNode);
-      }
     } else {
       console.error(`compilePropertyAccessExpression this value type: ${ValueTypeKind[thiz_value.type.kind]}`);
     }
     return new NoneValue();
+  }
+
+  compileElementAccessExpression(expr: ts.ElementAccessExpression) : Value {
+    const element = this.compileExpression(expr.expression);
+    const arg = this.compileExpression(expr.argumentExpression); 
+
+    return new ElementAccessValue(element, arg);
   }
 
   compileNewExpression(expr: ts.NewExpression) : Value {
