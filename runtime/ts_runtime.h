@@ -83,6 +83,7 @@ typedef ts_object_t* (*ts_to_string_t)(ts_object_t* self);
 typedef void (*ts_object_visitor_t)(ts_object_t* obj, void* user_data);
 typedef void (*ts_gc_visit_t)(ts_object_t* self, ts_object_visitor_t visitor, void*  user_data);
 typedef ts_module_t* (*ts_module_entry_t)(ts_runtime_t* rt);
+typedef const char* (*ts_enum_reflect_t)(ts_runtime_t* rt, uintptr_t value);
 
 typedef union _ts_member_t {
   intptr_t  field; // field offset
@@ -220,16 +221,21 @@ struct _ts_module_t {
   ts_object_t** functions;
   ts_vtable_env_t*  classes;
   ts_interface_meta_t** interfaces; 
+  ts_enum_reflect_t* enums;
   ts_vtable_env_t   _self_env; // save this env
 };
 
-#define TS_MODULE_SIZE(imports, values, functions, classes, interfaces) \
+#define TS_MODULE_SIZE_EX(imports, values, functions, classes, interfaces, enums) \
   (sizeof(ts_module_t) + \
    sizeof(ts_module_t*)*(imports) + \
    sizeof(ts_value_t)*(values) + \
    sizeof(ts_function_t)*(functions) + \
    sizeof(ts_vtable_env_t)*(classes)) + \
-   sizeof(ts_interface_meta_t*)*(interfaces)
+   sizeof(ts_interface_meta_t*)*(interfaces) + \
+   sizeof(ts_enum_reflect_t)*(enums)
+
+#define TS_MODULE_SIZE(imports, values, functions, classes, interfaces) \
+  TS_MODULE_SIZE_EX(imports, values, functions, classes, interfaces, 0)
 
 typedef enum _ts_module_package_type_t {
   ts_module_no_package,
@@ -360,13 +366,15 @@ static inline void ts_object_release(ts_object_t* obj) {
   }
 }
 
-static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
+
+static inline ts_module_t* ts_new_module_ex(ts_runtime_t* rt,
 		ts_vtable_t* vt,
 		uint32_t imports,
 		uint32_t values,
 		uint32_t functions,
 		uint32_t classes,
-		uint32_t interfaces) {
+		uint32_t interfaces,
+		uint32_t enums) {
   ts_vtable_env_t module_vt = {
     TS_VTABLE_THIS_INTERFACE_ENTRY,
     vt,
@@ -386,6 +394,7 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
   m->functions = TS_OFFSET(ts_object_t*, m->values, sizeof(ts_value_t) * values);
   m->classes = TS_OFFSET(ts_vtable_env_t, m->functions, sizeof(ts_function_t*) * functions);
   m->interfaces = TS_OFFSET(ts_interface_meta_t*, m->classes, sizeof(ts_vtable_env_t) * classes);
+  m->enums = TS_OFFSET(ts_enum_reflect_t, m->interfaces, sizeof(ts_interface_meta_t*) * interfaces);
 
   if (imports == 0)
     m->imports = NULL;
@@ -401,7 +410,20 @@ static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
   if (interfaces == 0)
     m->interfaces = NULL;
 
+  if (enums == 0)
+    m->enums = NULL;
+
   return m;
+}
+
+static inline ts_module_t* ts_new_module(ts_runtime_t* rt,
+		ts_vtable_t* vt,
+		uint32_t imports,
+		uint32_t values,
+		uint32_t functions,
+		uint32_t classes,
+		uint32_t interfaces) {
+  return ts_new_module_ex(rt, vt, imports, values, functions, classes, interfaces, 0);
 }
 
 static inline ts_member_t ts_vtable_member(ts_vtable_t* vtable, uint32_t member_index) {
