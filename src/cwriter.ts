@@ -26,6 +26,8 @@ import {
   ModuleInitializeNode,
   SemanticsNode,
   NamedNode,
+  EnumNode,
+  EnumMemberNode,
 
   SemanticsType,
   StorageScope,
@@ -46,6 +48,8 @@ import {
   ReturnValue,
   StroageValue,
   NewValue,
+  EnumValue,
+  ElementAccessValue,
   IsStroageValue,
 } from './resolver';
 
@@ -55,7 +59,7 @@ function GetModuleValue(value: StroageValue) : string {
     case ValueKind.kClass: return "classes";
     case ValueKind.kFunction: return "functions";
     case ValueKind.kInterface: return "interfaces";
-    case ValueKind.kEnumReflect: return "enums";
+    case ValueKind.kEnum: return "enums";
   }
   return '';
 }
@@ -411,6 +415,8 @@ export class CCodeWriter implements Writer {
     this.addSource("#include <ts_runtime.h>\n");
     this.addSource("#include <ts_lang.h>\n");
     this.addSource("#include <ts_std.h>\n");
+
+    this.buildEnumDefines();
   } 
 
   setClass(c: ClassNode) {
@@ -462,6 +468,8 @@ export class CCodeWriter implements Writer {
 	return this.buildNew(value as NewValue);
       case ValueKind.kPropertyAccess:
         return this.buildPropertyAccessValue(value as PropertyAccessValue);
+      case ValueKind.kElementAccess:
+	return this.buildElementAccess(value as ElementAccessValue);
     }
     return '';
   }
@@ -489,7 +497,19 @@ export class CCodeWriter implements Writer {
       }
 
       return `(*((${GetCTypeFromValueType(f.type.kind)}*)${member_offset}))`;
+    } else if (m.kind == SemanticsType.kEnumMember) {
+      return `enum_member_${(m.parent as EnumNode).name}_${(m as EnumMemberNode).name}`;
     }
+    return '';
+  }
+
+  buildElementAccess(v: ElementAccessValue) : string {
+    if (v.element.kind == ValueKind.kEnum) {
+      return `${GetValueStorage(v.element as EnumValue)}(__rt, (uintptr_t)(${this.buildValue(v.argument)}))`;
+    }
+
+    // TODO
+
     return '';
   }
 
@@ -535,9 +555,47 @@ export class CCodeWriter implements Writer {
       this.writeFunctionDefine(f);
     }
 
+    for (const e of this.module.enums) {
+      this.writeEnumRelect(e);
+    }
+
     this.writeModuleDefine();
   }
 
+  buildEnumDefines() {
+    for (const e of this.module.enums) {
+      for (const m of e.members) {
+	if (typeof m.value == 'number')
+          this.addSource(`const int enum_member_${e.name}_${m.name} = ${m.value};\n`);
+        else
+          this.addSource(`const char enum_member_${e.name}_${m.name}[] = "${EscapeString(m.value)}";\n`);
+      }
+    }
+  }
+
+  writeEnumRelect(e: EnumNode) {
+    this.addSource(`static const char* enum_reflect_${e.name}(ts_runtime_t* rt, uintptr_t v) {\n`);
+    if (e.type.kind == ValueTypeKind.kInt || e.type.kind == ValueTypeKind.kUnion) {
+      this.addSource(`  switch((int)v) {\n`);
+      for (const m of e.members) {
+	if (typeof m.value == 'number')
+          this.addSource(`    case ${m.value}: return "${EscapeString(m.name)}";\n`);
+      }
+      this.addSource(`  }\n`);
+    }
+    if (e.type.kind == ValueTypeKind.kString || e.type.kind == ValueTypeKind.kUnion) {
+      this.addSource(`  const char* str_v = (const char*)v;\n`);
+      for (const m of e.members) {
+        if (typeof m.value == 'string') {
+          this.addSource(`  if (str_v == enum_member_${e.name}_${m.name}
+				|| strcmp(str_v, enum_member_${e.name}_${m.name}) == 0)\n`);
+          this.addSource(`    return "${EscapeString(m.name)}";\n`);
+	}
+      }
+    }
+    this.addSource('  return "";\n');
+    this.addSource(`}\n`);
+  }
 
   writeFunctionDefine(f: FunctionLikeNode) {
     this.addSource(`static TS_FUNCTIONLIKE_CLOSURE_VTABLE_DEF(\n`);
@@ -597,12 +655,13 @@ export class CCodeWriter implements Writer {
 
 
     this.addSource(`TS_EXTERN ts_module_t* _${m.name}_module(ts_runtime_t* runtime) {\n`);
-    this.addSource(`  ts_module_t* m = ts_new_module(runtime, &_${m.name}_vt.base,`);
+    this.addSource(`  ts_module_t* m = ts_new_module_ex(runtime, &_${m.name}_vt.base,`);
     this.addSource(`0/*imports*/,`);
     this.addSource(`${m.vars.length}/*vars*/,`);
     this.addSource(`${m.functions.length}/*functions*/,`);
     this.addSource(`${m.functions.length + m.classes.length}/*classes*/,`);
-    this.addSource(`0/*interfaces*/);\n`);
+    this.addSource(`0/*interfaces*/,\n`);
+    this.addSource(`${m.enums.length}/*enums*/);\n`);
 
     let i = 0;
     for (i = 0; i < m.vars.length; i++) {
@@ -618,6 +677,12 @@ export class CCodeWriter implements Writer {
     for (const f of m.functions) {
       this.addSource(`  ts_init_vtable_env(&m->classes[${i}], &_${f.name}_vt.base, m, NULL);\n`);
       this.addSource(`  m->functions[${k++}] = ts_new_object(runtime, &m->classes[${i++}], NULL);\n`);
+    }
+
+
+    i = 0;
+    for (const e of m.enums) {
+      this.addSource(`  m->enums[${i++}] = enum_reflect_${e.name};\n`);
     }
 
     this.addSource(`  return m;\n`);
