@@ -1,7 +1,7 @@
 
 #include "ts_runtime.h"
 #include "ts_package.h"
-#include "ts_exception.hpp"
+#include "ts_exception.h"
 #include "ts_std.h"
 
 #ifdef TEST
@@ -266,7 +266,7 @@ int main(int argc, const char* argv[]) {
     free_messasge_loop(loop);
     TS_POP_LOCAL_SCOPE(rt);
   }
-  TS_CATCH(rt,err)
+  TS_CATCH(err)
     TS_DEF_ARGUMENTS(2);
     TS_SET_OBJECT_ARG(TS_STRING_NEW_STACK(rt, "TS Error:"));
     TS_SET_OBJECT_ARG(err);
