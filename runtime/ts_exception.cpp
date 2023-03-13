@@ -4,7 +4,7 @@
 #include "ts_std.h"
 #include "ts_lang.h"
 
-#include "ts_exception.hpp"
+#include "ts_exception.h"
 
 //#ifdef TOWASM
 uint32_t global_index = 1;
