@@ -216,7 +216,7 @@ static inline ts_object_t* ts_exception_new_error(ts_runtime_t* rt, const char* 
 } while(0)
 
 #ifdef TOWASM
-#define TS_CATCH(rt,err)                                        \
+#define TS_CATCH(err)                                        \
    }; }while(0);                                                           \
    rt->try_block->callbackExp = [](ts_runtime_t*rt ,int val) ->void      \
    {  do{                                                       \

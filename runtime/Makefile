@@ -85,7 +85,7 @@ runtime_srcs =                     \
 
 #运行make wasm之前，采用wasi-sdk19版本，在环境变量中指定export CC="${WASI_SDK_PATH}/bin/clang --sysroot=${WASI_SDK_PATH}/share/wasi-sysroot"
 wasm: $(runtime_srcs)
-	$(CC) -I. -o tsshell.wasm $^ -Wl,--strip-all -Wl,--export=jmpCallbackExp -Wl,--export=jmpCallbackTry -Wl,--export=__main_argc_argv -Wl,--allow-undefined -DTOWASM
+	$(CC) -fpermissive -I. -o tsshell.wasm $^ -Wl,--strip-all -Wl,--export=jmpCallbackExp -Wl,--export=jmpCallbackTry -Wl,--export=__main_argc_argv -Wl,--allow-undefined -DTOWASM
 
 tsshell: $(runtime_objs)
 	$(CC) -o $@ $^ $(RT_LDFLAGS) -ldl -lm
