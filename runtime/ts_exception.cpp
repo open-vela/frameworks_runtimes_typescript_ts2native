@@ -6,9 +6,9 @@
 
 #include "ts_exception.h"
 
-//#ifdef TOWASM
+#ifdef TOWASM
 uint32_t global_index = 1;
-//#endif
+#endif
 
 typedef struct _ts_exception_error_t {
   ts_object_t base;

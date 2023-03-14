@@ -20,7 +20,7 @@
 #include <poll.h>
 
 #ifdef TOWASM
-#include "ts_built_in_modules.h"
+#include "test/ts_built_in_modules.h"
 extern "C" int timerfd_create_inwamr();
 extern "C" int timerfd_settime_inwamr(int fd,uint64_t min_timeout);
 #endif

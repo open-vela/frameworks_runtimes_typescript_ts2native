@@ -51,11 +51,13 @@ builtin_objs = 						          \
 RT_LDFLAGS = $(BUILD_32BIT)
 
 RT_CFLAGS = $(BUILD_32BIT) -I. -g
+CXXFLAGS = $(BUILD_32BIT) -fPIC -I. -g
 
 vela: RT_LDFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
 vela: RT_CFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
+vela: CXXFLAGS += -p -fsanitize=address -fsanitize-recover=address -DTEST
 vela: $(runtime_objs) $(builtin_objs)
-	$(CC) -o tsshell_vela $^ $(RT_LDFLAGS) -ldl
+	$(CC) -o tsshell_vela $^ $(RT_LDFLAGS) -ldl -lm
 
 runtime_srcs =                     \
     ts_shell.cpp                   \
@@ -68,7 +70,8 @@ runtime_srcs =                     \
     ts_std_promise.c               \
     ts_exception.cpp               \
     ts_package.c                   \
-    ts_built_in_modules.c          \
+    ts_std_date.c                  \
+    test/ts_built_in_modules.c     \
     test/test_class2_manual.c      \
     test/test_async_await_manual.c \
     test/test_class1_manual.c      \
