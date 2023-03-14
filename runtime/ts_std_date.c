@@ -1,7 +1,7 @@
 #include <math.h>
 #include <sys/time.h>
 #include "time.h"
-#include "ts_exception.h"
+#include "ts_lang.h"
 #include "ts_std_timer_internal.h"
 
 typedef struct _ts_std_date_t {
@@ -558,7 +558,7 @@ static uint64_t js_Date_parse(ts_object_t* obj,
 
   //  sp = JS_VALUE_GET_STRING(s);
   ts_object_t* s = (ts_object_t*)TS_ARG_OBJECT(args, 0);
-  const char* sp = ts_string_get_utf8(s);
+  const char* sp = (const char*)ts_string_get_utf8(s);
   int sp_len = ts_string_length(s);
   p = 0;
   if (p < sp_len &&
