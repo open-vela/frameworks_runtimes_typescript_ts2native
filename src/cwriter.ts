@@ -51,6 +51,14 @@ import {
   EnumValue,
   ElementAccessValue,
   IsStroageValue,
+  IfValue,
+  ThenValue,
+  ElseValue,
+  WhileValue,
+  DoWhileValue,
+  SwitchValue,
+  CaseValue,
+  UnaryOpValue,
 } from './resolver';
 
 function GetModuleValue(value: StroageValue) : string {
@@ -111,7 +119,8 @@ function GetObjectValue(v: Value) : string {
 }
 
 const ValueKindsHasSubType = [ValueKind.kVar, ValueKind.kParameter, ValueKind.kReturn];
-
+const BranchValueKind = [ValueKind.KIf, ValueKind.KElse, ValueKind.KThen, ValueKind.KWhile, 
+                         ValueKind.KDoWhile, ValueKind.KSwitch, ValueKind.KCase];
 function GetSubValueFromKind(kind: ValueTypeKind) : string {
   let subvalue = '';
   switch(kind) {
@@ -243,7 +252,7 @@ function CastTo(to: Value, from: Value, code: string) : string {
   return `${code}${GetValueSubValue(from)}`;
 }
 
-function GetLeftValueSubValue(left: Value, right: Value) {
+function GetLeftValueSubValue(left: Value, right?: Value) {
   if (left.type.kind == ValueTypeKind.kAny) {
     //return GetSubValueFromKind(right.type.kind);
     return '.object';
@@ -251,7 +260,29 @@ function GetLeftValueSubValue(left: Value, right: Value) {
 
   return GetValueSubValue(left);
 }
-
+function BuildUnaryOperatorCode(op: ts.SyntaxKind, operand: string, operand_value: Value, isPrefix: boolean){
+  switch (op){
+    case ts.SyntaxKind.PlusPlusToken:
+      if(isPrefix){
+        return `++${operand}${GetLeftValueSubValue(operand_value)}`;
+      }
+      
+      return `${operand}${GetLeftValueSubValue(operand_value)}++`;
+    case ts.SyntaxKind.MinusMinusToken:
+      if(isPrefix){
+        return `--${operand}${GetLeftValueSubValue(operand_value)}`;
+      }
+      return `${operand}${GetLeftValueSubValue(operand_value)}--`;
+    case ts.SyntaxKind.PlusToken:
+      return `+${operand}${GetLeftValueSubValue(operand_value)}`;
+    case ts.SyntaxKind.MinusToken:
+      return `-${operand}${GetLeftValueSubValue(operand_value)}`;
+    case ts.SyntaxKind.TildeToken:  
+      //return `~${operand}${GetLeftValueSubValue(operand_value)}`;
+    case ts.SyntaxKind.ExclamationToken: 
+    //return `!${operand}${GetLeftValueSubValue(operand_value)}`;
+  }
+}
 function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, right_value: Value, right: string) : string {
   switch(op) {
     case ts.SyntaxKind.EqualsToken:
@@ -277,17 +308,17 @@ function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, r
     case ts.SyntaxKind.LessThanLessThanEqualsToken:
       return `${left}${GetLeftValueSubValue(left_value, right_value)}  <<= ${CastTo(left_value, right_value, right)}`;
     case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken:
-      return '>>>=';
+      return `${left}${GetValueSubValue(left_value)} = (uint64_t)${left}${GetValueSubValue(left_value)}  >> ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.GreaterThanGreaterThanEqualsToken:
       return '>>=';
     case ts.SyntaxKind.AsteriskAsteriskToken:
-      return '**';
+      return `powl(${left}${GetLeftValueSubValue(left_value, right_value)}, ${right})`;
     case ts.SyntaxKind.AsteriskToken:
       return `${left}${GetValueSubValue(left_value)} * ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.SlashToken:
       return `${left}${GetValueSubValue(left_value)} / ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.PercentToken:
-      return `${left}${GetValueSubValue(left_value)}  % ${right}${GetValueSubValue(right_value)} `;
+      return `fmod(${left}${GetLeftValueSubValue(left_value, right_value)}, ${right})`;
     case ts.SyntaxKind.PlusToken:
       return `${left}${GetValueSubValue(left_value)}  + ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.MinusToken:
@@ -299,13 +330,19 @@ function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, r
     case ts.SyntaxKind.GreaterThanGreaterThanToken:
       return `${left}${GetValueSubValue(left_value)}  >> ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
-      return '<<<';
+      return `(uint64_t)${left}${GetValueSubValue(left_value)}  >> ${right}${GetValueSubValue(right_value)} `;
     case ts.SyntaxKind.LessThanToken:
-      return '<';
+      if(left_value.type.kind == ValueTypeKind.kString){
+        return `strcmp(${left}${GetValueSubValue(left_value)}, ${right}${GetValueSubValue(right_value)}) < 0`;
+      }
+      return `${left}${GetValueSubValue(left_value)}  < ${right}${GetValueSubValue(right_value)}`;
     case ts.SyntaxKind.LessThanEqualsToken:
       return '<=';
     case ts.SyntaxKind.GreaterThanToken:
-      return '>';
+      if(left_value.type.kind == ValueTypeKind.kString){
+        return `strcmp(${left}${GetValueSubValue(left_value)}, ${right}${GetValueSubValue(right_value)}) > 0`;
+      }
+      return `${left}${GetValueSubValue(left_value)}  > ${right}${GetValueSubValue(right_value)}`;
     case ts.SyntaxKind.GreaterThanEqualsToken:
       return '>=';
     case ts.SyntaxKind.InstanceOfKeyword:
@@ -325,7 +362,7 @@ function BuildOperatorCode(op: ts.SyntaxKind, left_value: Value, left: string, r
     case ts.SyntaxKind.BarToken:
       return '|';
     case ts.SyntaxKind.CaretToken:
-      return '^';
+      return `(int64_t)${left}${GetLeftValueSubValue(left_value, right_value)}^(int64_t)${right}`;
     case ts.SyntaxKind.AmpersandAmpersandToken:
       return '&&';
     case ts.SyntaxKind.BarBarToken:
@@ -445,7 +482,12 @@ export class CCodeWriter implements Writer {
   }
 
   writeValue(value: Value) {
-    this.addSource(`  ${this.buildValue(value)};\n`);
+    if(BranchValueKind.indexOf(value.kind) > 0){
+      this.addSource(`  ${this.buildValue(value)}\n`);
+    }
+    else{
+      this.addSource(`  ${this.buildValue(value)};\n`);
+    }
   }
 
   buildValue(value: Value) : string {
@@ -456,6 +498,8 @@ export class CCodeWriter implements Writer {
         return this.buildLiteralValue(value as LiterialValue);
       case ValueKind.kBinaryOp:
 	return this.buildBinaryOpValue(value as BinaryOpValue);
+      case ValueKind.KUnaryOp:
+  return this.buildUnaryOpValue(value as UnaryOpValue);
       case ValueKind.kCall:
 	return this.buildCallValue(value as FunctionCallValue);
       case ValueKind.kParameter:
@@ -470,6 +514,22 @@ export class CCodeWriter implements Writer {
         return this.buildPropertyAccessValue(value as PropertyAccessValue);
       case ValueKind.kElementAccess:
 	return this.buildElementAccess(value as ElementAccessValue);
+      case ValueKind.KIf:
+        return this.buildIfValue(value as IfValue);
+      case ValueKind.KThen:
+        return `}`
+      case ValueKind.KElse:
+        return this.buildElseValue(value as ElseValue);
+      case ValueKind.KWhile:
+        return this.buildWhileValue(value as WhileValue);
+      case ValueKind.KDoWhile:
+        return this.buildDoWhileValue(value as DoWhileValue);
+      case ValueKind.KSwitch:
+        return this.buildSwitchValue(value as SwitchValue);
+      case ValueKind.KCase:
+        return this.buildCaseValue(value as CaseValue);
+      case ValueKind.KBreak:
+        return `break`;
     }
     return '';
   }
@@ -523,7 +583,9 @@ export class CCodeWriter implements Writer {
     }
     return '';
   }
-
+  buildUnaryOpValue(v: UnaryOpValue) : string{
+    return BuildUnaryOperatorCode(v.op, this.buildValue(v.operand), v.operand, v.isPrefix);
+  }
   buildBinaryOpValue(v: BinaryOpValue) : string {
     return BuildOperatorCode(v.op, v.left, this.buildValue(v.left), v.right, this.buildValue(v.right));
   }
@@ -543,7 +605,50 @@ export class CCodeWriter implements Writer {
   buildParameterValue(v: ParameterValue) : string {
     return BuildOperatorCode(ts.SyntaxKind.EqualsToken, v, GetValueStorage(v), v.value, this.buildValue(v.value));
   }
-
+  // TODO align
+  buildIfValue(v: IfValue): string{
+    console.log("buildIfValue");
+    let expr : string = `${this.buildValue(v.expr)}${GetLeftValueSubValue(v.expr, v.expr)}`;
+    return `if(${expr}){`;
+  }
+  buildElseValue(v: ElseValue): string{
+    if(v.start){
+      return `else{`;
+    }
+    return `}`;
+  }
+  buildWhileValue(v: WhileValue): string{
+    if(v.start){
+      const expr = `${this.buildValue(v.expr)}${GetLeftValueSubValue(v.expr, v.expr)}`;
+      return `while(${expr}){`;
+    }
+    else{
+      return '}';
+    }
+  }
+  buildDoWhileValue(v: DoWhileValue): string{
+    if(v.start){
+      return `do{`;
+    }
+    else{
+      const expr = `${this.buildValue(v.expr)}${GetLeftValueSubValue(v.expr, v.expr)}`;
+      return `}while(${expr});`
+    }
+  }
+  buildSwitchValue(v: SwitchValue): string{
+    if(v.start){
+      const expr = `${this.buildValue(v.expr)}${GetLeftValueSubValue(v.expr, v.expr)}`;
+      return `switch(${expr}){`;
+    }
+    return `}`;
+  }
+  buildCaseValue(v: CaseValue): string{
+    if(v.isDefault){
+      return `default:`;
+    }
+    const expr = `${this.buildValue(v.expr)}${GetLeftValueSubValue(v.expr, v.expr)}`;
+    return `case ${expr}:`
+  }
   finish() {
     // write functions, class and module
 
