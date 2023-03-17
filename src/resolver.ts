@@ -148,6 +148,15 @@ export enum ValueKind {
   kNew,
   kPropertyAccess,
   kReturn,
+  KIf,
+  KThen,
+  KElse,
+  KWhile,
+  KDoWhile,
+  KSwitch,
+  KCase,
+  KBreak,
+  KUnaryOp,
 }
 
 export class Value {
@@ -301,7 +310,17 @@ export class NewValue extends FunctionLikeCallValue {
     return new NewValue(new ClassValue(clazzType), start);
   }
 }
-
+export class UnaryOpValue extends Value{
+  op: ts.PrefixUnaryOperator | ts.PostfixUnaryOperator;
+  operand: Value;
+  isPrefix: boolean;
+  constructor(op: ts.PrefixUnaryOperator | ts.PostfixUnaryOperator, operand : Value, isPrefix: boolean){
+    super(ValueKind.KUnaryOp, operand.type);  // to do
+    this.op = op;
+    this.operand = operand;
+    this.isPrefix = isPrefix;
+  }
+}
 export class BinaryOpValue extends Value {
   op: ts.BinaryOperator;
   left: Value;
@@ -384,7 +403,68 @@ export class ElementAccessValue extends Value {
     this.argument = arg;
   }
 }
+export class IfValue extends Value{
+  expr: Value;
+  constructor(expr: Value){
+    super(ValueKind.KIf, PrimitiveValueType.Void);
+    this.expr = expr;
+  }
+}
+export class ThenValue extends Value{
+  constructor(){
+    super(ValueKind.KThen, PrimitiveValueType.Void);
+  }
+}
+export class ElseValue extends Value{
+  start: boolean;
+  constructor(start: boolean){
+    super(ValueKind.KElse, PrimitiveValueType.Void);
+    this.start = start;
+  }
+}
+export class WhileValue extends Value{
+  expr: Value;
+  start: boolean;
+  constructor(start: boolean, expr?: Value){
+    super(ValueKind.KWhile, PrimitiveValueType.Void);
+    this.start = start;
+    this.expr = expr;
+  }
+}
+export class DoWhileValue extends Value{
+  expr: Value;
+  start: boolean;
+  constructor(start: boolean, expr?: Value){
+    super(ValueKind.KDoWhile, PrimitiveValueType.Void);
+    this.start = start;
+    this.expr = expr;
+  }
+}
+export class SwitchValue extends Value{
+  expr: Value;
+  start: boolean;
+  constructor(start: boolean, expr? :Value){
+    super(ValueKind.KSwitch, PrimitiveValueType.Void);
+    this.start = start;
+    this.expr = expr;
+  }
+}
+export class CaseValue extends Value{
+  expr: Value;
+  isDefault: boolean;
+  constructor(isDefault: boolean, expr? : Value){
+    super(ValueKind.KCase, PrimitiveValueType.Void);
+    this.isDefault = isDefault;
+    this.expr = expr;
+  }
+}
+export class BreakValue extends Value{
+  label: string;
+  constructor(label?: string){
+    super(ValueKind.KBreak, PrimitiveValueType.Void);
 
+  }
+}
 export type StroageValue = VarValue | FunctionValue | ParameterValue | ClassValue | EnumValue;
 export function IsStroageValue(v: Value) : boolean {
   return v.kind == ValueKind.kVar
@@ -1699,6 +1779,9 @@ class CompilerContext extends ContextBase {
 		  isEqualOperator((expr as ts.BinaryExpression).operatorToken.kind)) {
             this.values.push(value);
           }
+    if(value.kind == ValueKind.KUnaryOp){
+            this.values.push(value);
+          }
         }
         break;
 
@@ -1708,6 +1791,20 @@ class CompilerContext extends ContextBase {
       case ts.SyntaxKind.ReturnStatement:
 	this.compileReturnStatement((n as ts.ReturnStatement));
         break;
+      case ts.SyntaxKind.IfStatement:
+        this.compileIfStatement((n as ts.IfStatement));
+        break;
+      case ts.SyntaxKind.WhileStatement:
+        this.compileWhileStatement((n as ts.WhileStatement));
+        break;
+      case ts.SyntaxKind.DoStatement:
+        this.compileDoWhileStatement((n as ts.DoStatement));
+        break;
+      case ts.SyntaxKind.SwitchStatement:
+        this.compileSwitchStatement((n as ts.SwitchStatement));
+        break;
+      case ts.SyntaxKind.BreakStatement:
+        this.compileBreakStatement((n as ts.BreakStatement));
     }
   }
 
@@ -1763,7 +1860,79 @@ class CompilerContext extends ContextBase {
   compileReturnStatement(retNode: ts.ReturnStatement) {
     this.compileReturnExpression(retNode.expression);
   }
-  
+  compileIfStatement(ifSt: ts.IfStatement){
+    const expr = this.compileExpression(ifSt.expression);
+    const if_value = new IfValue(expr);
+    this.values.push(if_value);
+    this.compileThenStatement(ifSt.thenStatement);
+    this.compileElseStatement(ifSt.elseStatement);
+  }
+  compileThenStatement(thenSt: ts.Statement) {
+    this.compileFunctionStatement(thenSt);
+    const then_value = new ThenValue();
+    this.values.push(then_value);
+  }
+  compileElseStatement(elseSt: ts.Statement){
+    if(!elseSt) return;
+    const else_start = new ElseValue(true);
+    this.values.push(else_start);
+    this.compileFunctionStatement(elseSt);
+    const else_end = new ElseValue(false);
+    this.values.push(else_end);
+  }
+  compileWhileStatement(whileSt: ts.WhileStatement){
+    const expr = this.compileExpression(whileSt.expression);
+    const while_start = new WhileValue(true, expr);
+    this.values.push(while_start);
+    this.compileFunctionStatement(whileSt.statement);
+    const while_end = new WhileValue(false);
+    this.values.push(while_end);
+  }
+  compileDoWhileStatement(doSt: ts.DoStatement){
+    const expr = this.compileExpression(doSt.expression);
+    const do_start = new DoWhileValue(true);
+    this.values.push(do_start);
+    this.compileFunctionStatement(doSt.statement);
+    const do_end = new DoWhileValue(false, expr);
+    this.values.push(do_end);
+  }
+  compileSwitchStatement(swicthSt: ts.SwitchStatement){
+    const expr = this.compileExpression(swicthSt.expression);
+    const switch_start = new SwitchValue(true, expr);
+    this.values.push(switch_start);
+    this.compileCaseBlock(swicthSt.caseBlock);
+    const switch_end = new SwitchValue(false);
+    this.values.push(switch_end);
+  }
+  compileBreakStatement(brSt: ts.BreakStatement){ //
+    const break_value = new BreakValue();
+    this.values.push(break_value);
+  }
+  compileCaseBlock(n: ts.CaseBlock){
+    for(let e of n.clauses){
+      if(e.kind == ts.SyntaxKind.CaseClause){
+        this.compileCaseClause(e);
+      }
+      else{
+        this.compileDefaultClause(e);
+      }
+    }
+  }
+  compileCaseClause(n: ts.CaseClause){
+    const expr = this.compileExpression(n.expression);
+    const case_value = new CaseValue(false, expr);
+    this.values.push(case_value);
+    for(let st of n.statements){
+      this.compileFunctionStatement(st);
+    }
+  }
+  compileDefaultClause(n: ts.DefaultClause){
+    const default_value = new CaseValue(true);
+    this.values.push(default_value);
+    for(let st of n.statements){
+      this.compileFunctionStatement(st);
+    }
+  }
   compileReturnExpression(expr: ts.Expression) {
     if (expr) {
       const kind = expr.kind;
@@ -1799,6 +1968,10 @@ class CompilerContext extends ContextBase {
 	return this.compileNewExpression(expr as ts.NewExpression);
       case ts.SyntaxKind.ElementAccessExpression:
 	return this.compileElementAccessExpression(expr as ts.ElementAccessExpression);
+    case ts.SyntaxKind.PrefixUnaryExpression:
+  return this.compilePrefixUnaryExpression(expr as ts.PrefixUnaryExpression);
+    case ts.SyntaxKind.PostfixUnaryExpression:
+  return this.compilePostfixUnaryExpression(expr as ts.PostfixUnaryExpression);
       default:
 	console.error(`unknown the expresstion: ${nodeToString(expr)}`);
     }
@@ -1898,7 +2071,14 @@ class CompilerContext extends ContextBase {
     const left_value = this.compileExpression(expr.left);
     return new BinaryOpValue(left_value, expr.operatorToken.kind, right_value);
   }
-
+  compilePrefixUnaryExpression(expr : ts.PrefixUnaryExpression):Value{
+    const operand_value = this.compileExpression(expr.operand);
+    return new UnaryOpValue(expr.operator, operand_value, true);
+  }
+  compilePostfixUnaryExpression(expr : ts.PostfixUnaryExpression):Value{
+    const operand_value = this.compileExpression(expr.operand);
+    return new UnaryOpValue(expr.operator, operand_value, false);
+  }
   compileIdentifier(id: ts.Identifier) : Value {
     return this.resolve(id.text, isVarValue);
   }
