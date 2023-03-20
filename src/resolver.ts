@@ -71,6 +71,45 @@ export interface UnionValueType extends ValueType {
   types: ValueType[];
 }
 
+function IsValueTypeEqual(v1: ValueType, v2: ValueType) : boolean {
+  if (v1.kind != v2.kind) return false;
+
+  switch(v1.kind) {
+    case ValueTypeKind.kArray:
+      return IsValueTypeEqual((v1 as ArrayValueType).element, (v2 as ArrayValueType).element);
+    case ValueTypeKind.kSet:
+      return IsValueTypeEqual((v1 as SetValueType).element, (v2 as SetValueType).element);
+    case ValueTypeKind.kMap:
+      return IsValueTypeEqual((v1 as MapValueType).key, (v2 as MapValueType).key)
+          && IsValueTypeEqual((v1 as MapValueType).value, (v2 as MapValueType).value);
+    case ValueTypeKind.kObject:
+      return (v1 as ObjectValueType).clazz.equals((v2 as ObjectValueType).clazz);
+
+    case ValueTypeKind.kUnion:
+      {
+        const types1 = (v1 as UnionValueType).types;
+        const types2 = (v2 as UnionValueType).types;
+        const set1 = new Set<ValueType>();
+        for (const t of types1)
+          set1.add(t);
+          for (const t of types2) {
+            for (const s of set1) {
+              if (IsValueTypeEqual(t, s)) {
+                set1.delete(s);
+            break;
+          }
+        }
+        return false;
+      }
+      if (set1.size == 0)
+          return true;
+    }
+    break;
+  }
+
+  return true;
+}
+
 export const PrimitiveValueType = {
   Void:         {kind: ValueTypeKind.kVoid},
   Undefined:    {kind: ValueTypeKind.kUndefined},
@@ -157,6 +196,7 @@ export enum ValueKind {
   KCase,
   KBreak,
   KUnaryOp,
+  kStringBuilder,
 }
 
 export class Value {
@@ -168,7 +208,7 @@ export class Value {
     this.type = type;
   }
 
-  equal(v: Value) : boolean {
+  equals(v: Value) : boolean {
     return v.kind == this.kind;
   }
 }
@@ -189,7 +229,7 @@ export class VarValue extends Value {
     this.index = index;
   }
 
-  equal(v: Value) : boolean {
+  equals(v: Value) : boolean {
     return (this.kind == v.kind)
          && (this.storage == (v as VarValue).storage)
      && (this.index == (v as VarValue).index);
@@ -207,12 +247,12 @@ export class ParameterValue extends Value {
     this.value = value;
   }
 
-  equal(v: Value) : boolean {
-    if (super.equal(v)) {
+  equals(v: Value) : boolean {
+    if (super.equals(v)) {
       const p = v as ParameterValue;
       return p.storage == this.storage
            && p.index == this.index
-           && this.value.equal(p.value);
+           && this.value.equals(p.value);
     }
     return false;
   }
@@ -332,12 +372,12 @@ export class BinaryOpValue extends Value {
     this.right = right;
   }
 
-  equal(v: Value) : boolean {
-    if (super.equal(v)) {
+  equals(v: Value) : boolean {
+    if (super.equals(v)) {
       const b = v as BinaryOpValue;
       return b.op == this.op
-           && this.left.equal(b.left)
-       && this.right.equal(b.right);
+           && this.left.equals(b.left)
+       && this.right.equals(b.right);
     }
     return false;
   }
@@ -349,6 +389,28 @@ export class ReturnValue extends Value {
     super(ValueKind.kReturn, PrimitiveValueType.Void);
   }
 }
+
+export interface StringSpan {
+  value: Value;
+  literal: string;
+}
+
+export class BuildStringValue extends Value {
+  head: string;
+  spans: StringSpan[] = [];
+  outValue: VarValue;
+
+  constructor(outValue: VarValue, head: string) {
+    super(ValueKind.kStringBuilder, PrimitiveValueType.Void);
+    this.head = head;
+    this.outValue = outValue;
+  }
+
+  add(value: Value, literal: string) {
+    this.spans.push({value: value, literal: literal});
+  }
+}
+
 
 export function IsLeftValue(value: Value) {
   return value.kind == ValueKind.kVar
@@ -528,6 +590,7 @@ function isVarValue(kind: SemanticsType) : boolean {
 function isClassLikeValue(kind: SemanticsType) : boolean {
   return kind == SemanticsType.kClass
        || kind == SemanticsType.kInterface
+       || kind == SemanticsType.kLiteralClass;
 }
 
 function isTypeValue(kind: SemanticsType) : boolean {
@@ -561,6 +624,10 @@ export class SemanticsNode {
 
   dump(writer: DumpWriter) {
     writer.writeLine(`${SemanticsType[this.kind]} @${this.index}`);
+  }
+
+  equals(s: SemanticsNode) : boolean {
+    return s.kind == this.kind;
   }
 }
 
@@ -665,6 +732,15 @@ export class ParameterNode extends NamedNode {
   dump(writer: DumpWriter) {
     writer.writeLine(`Paramter ${this.name}@${this.index} type: ${ValueTypeToString(this.type)} ...:${this.is_dotdotdot} closure: ${this.usedByClosure}`);
   }
+
+  equals(s: SemanticsNode) : boolean {
+    if (super.equals(s)) {
+      const p = s as ParameterNode;
+      return p.is_dotdotdot == this.is_dotdotdot
+         && IsValueTypeEqual(p.type, this.type);
+    }
+    return false;
+  }
 }
 
 type ClosureableDataNode = VarNode | ParameterNode;
@@ -689,6 +765,12 @@ export class EnumMemberNode extends NamedNode {
     super(SemanticsType.kEnumMember, name, node);
     this. value = value;
   }
+
+  equals(s: SemanticsNode) : boolean {
+    return super.equals(s)
+           && (s as EnumMemberNode).name === this.name
+           && this.value === (s as EnumMemberNode).value;
+  }
 }
 
 export class EnumNode extends NamedNode {
@@ -696,6 +778,19 @@ export class EnumNode extends NamedNode {
   members: EnumMemberNode[] = [];
   constructor(name: string, node: ts.Node) {
     super(SemanticsType.kEnum, name, node);
+  }
+
+  equals(s: SemanticsNode) : boolean {
+    if (super.equals(s)) {
+      const e = s as EnumNode;
+      for (const c1 of this.members) {
+        const c2 = e.find(c1.name);
+        if (!c2 || c2.equals(c1))
+          return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   add(n: SemanticsNode) {
@@ -750,6 +845,23 @@ export class FunctionLikeNode extends NamedNode {
 
   constructor(kind: FunctionLikeNodeType, name: string, astNode: ts.Node) {
     super(kind, name, astNode);
+  }
+
+  equals(s: SemanticsNode) : boolean {
+    if (super.equals(s)){
+      const f = s as FunctionLikeNode;
+      if (!IsValueTypeEqual(this.returnValueType, f.returnValueType))
+        return false;
+      if (f.param_count != this.param_count)
+        return false;
+      let i = 0;
+      for (i = 0; i < this.param_count; i ++) {
+        if (!this.params[i].equals(f.params[i]))
+          return false;
+      }
+      return true;
+    }
+    return false;
   }
 
   getParamterType(i: number) : ValueType {
@@ -872,6 +984,10 @@ export class FieldNode extends NamedNode {
     this.offset64 = -1;
   }
 
+  equals(s: SemanticsNode) : boolean {
+    return super.equals(s) && IsValueTypeEqual(this.type, (s as FieldNode).type);
+  }
+
   dump(writer: DumpWriter) {
     writer.writeLine(`Field '${this.name}':${ValueTypeToString(this.type)} @${this.index} Offset: ${this.offset32}, ${this.offset64}`);
   }
@@ -882,11 +998,48 @@ export type MemberNode = MethodNode | FieldNode;
 
 type ClassLikeNodeType = SemanticsType.kClass | SemanticsType.kInterface | SemanticsType.kLiteralClass;
 
+
+function calcOffset(fields: FieldNode[], start: number, e_size: number, offsets: number[], update: {(f: FieldNode, offset: number):void}) : number {
+  let s = (start + e_size - 1) & (~(e_size - 1));  //align e_size
+  for(let i = 0; i < offsets.length; i ++) {
+    if (offsets[i] == e_size) {
+      update(fields[i], s);
+      s += e_size;
+    }
+  }
+  return s;
+}
+
 class ClassLikeNode extends NamedNode {
   members: MemberNode[] = [];
+  extends?: ClassNode;
+  impl_interfaces: ClassLikeNode[];
 
   constructor(kind: ClassLikeNodeType, name: string, astNode: ts.Node) {
     super(kind, name, astNode);
+  }
+
+  equals(s: SemanticsNode) : boolean {
+    if (super.equals(s)) {
+      const c = s as ClassLikeNode;
+      if (this.extends && c.extends) {
+        if (!this.extends.equals(c.extends)) return false;
+      } else if (this.extends || c.extends) {
+        return false;
+      }
+
+      if (c.members.length != this.members.length)
+        return false;
+
+      for (const m of c.members) {
+        const m2 = this.find(m.name);
+        if (!(m2 && m2.equals(m)))
+          return false;
+      }
+      return true;
+    }
+
+    return false;
   }
 
   addMember(member: MemberNode | undefined) {
@@ -895,6 +1048,23 @@ class ClassLikeNode extends NamedNode {
       member.parent = this;
       this.members.push(member);
     }
+  }
+
+  addImplements(intf: ClassLikeNode) {
+    if (intf.kind == SemanticsType.kLiteralClass)
+      return;
+
+    if (!this.impl_interfaces) {
+      this.impl_interfaces = [intf];
+      return;
+    }
+
+    for (const i of this.impl_interfaces) {
+      if (i.name === intf.name)
+        return;
+    }
+
+    this.impl_interfaces.push(intf);
   }
 
   add(n: SemanticsNode) {
@@ -930,17 +1100,6 @@ class ClassLikeNode extends NamedNode {
   }
 
   getConstructor() : ConstructorNode | undefined { return undefined; }
-}
-
-function calcOffset(fields: FieldNode[], start: number, e_size: number, offsets: number[], update: {(f: FieldNode, offset: number):void}) : number {
-  let s = (start + e_size - 1) & (~(e_size - 1));  //align e_size
-  for(let i = 0; i < offsets.length; i ++) {
-    if (offsets[i] == e_size) {
-      update(fields[i], s);
-      s += e_size;
-    }
-  }
-  return s;
 }
 
 export class ClassNode extends ClassLikeNode {
@@ -999,6 +1158,12 @@ export class ClassNode extends ClassLikeNode {
   }
 }
 
+export class InterfaceNode extends ClassLikeNode {
+  constructor(name: string, astNode: ts.Node) {
+    super(SemanticsType.kInterface, name, astNode);
+  }
+}
+
 export class VarNode extends NamedNode {
   type: ValueType;
   usedByClosure: boolean = false;
@@ -1020,8 +1185,12 @@ export class ModuleLikeNode extends NamedNode {
   classes: ClassNode[] = [];
   functions: FunctionNode[] = [];
   // interfaces
+  interfaces: InterfaceNode[] = [];
   vars: VarNode[] = [];
   enums: EnumNode[] = [];
+
+  tempClasses: Map<ts.Node, ClassNode> = new Map();
+  funcExpress: Map<ts.Node, FunctionNode> = new Map();
 
   initialize: ModuleInitializeNode;
 
@@ -1029,6 +1198,36 @@ export class ModuleLikeNode extends NamedNode {
     super(kind, name, astNode);
     this.initialize = this.createModuleInitialzeMethod(astNode);
     console.log("=== initalize:", SemanticsType[this.initialize.kind]);
+  }
+
+  setTempClass(clazz: ClassNode, node: ts.Node) {
+    this.tempClasses.set(node, clazz);
+    clazz.parent = this;
+  }
+
+  getTempClass(node: ts.Node) : ClassNode {
+    return this.tempClasses.get(node);
+  }
+
+  uploadTempClass(clazz: ClassNode) {
+    const new_clazz = this.tempClasses.get(clazz.astNode);
+    if (!new_clazz)  return; // TODO
+
+    this.classes.push(clazz);
+    this.tempClasses.delete(clazz.astNode);
+  }
+
+  combineTempClass(clazz: ClassNode) : ClassNode | undefined {
+    // find the same expression value
+    for (const c of this.classes) {
+      if (c.equals(clazz))
+        return c;
+    }
+    return undefined;
+  }
+
+  setFunctionExpression(func: FunctionNode, node: ts.Node) {
+    this.funcExpress.set(node, func);
   }
 
   getTemporaryClassName() : string {
@@ -1047,18 +1246,21 @@ export class ModuleLikeNode extends NamedNode {
       case SemanticsType.kLiteralClass:
         this.addTo(this.classes, n);
         break;
+      case SemanticsType.kInterface:
+        this.addTo(this.interfaces, n);
+        break;
       case SemanticsType.kFunction:
-    this.addTo(this.functions, n);
+        this.addTo(this.functions, n);
         break;
       case SemanticsType.kVar:
-    this.addTo(this.vars, n);
+        this.addTo(this.vars, n);
         break;
       case SemanticsType.kEnum:
-    this.addTo(this.enums, n);
+        this.addTo(this.enums, n);
         break;
       default:
-    // TODO ERROR
-    break;
+        // TODO ERROR
+        break;
     }
   }
 
@@ -1079,9 +1281,10 @@ export class ModuleLikeNode extends NamedNode {
   find(name: string) : SemanticsNode | undefined {
     return this.findFrom(name, this.vars)
           || this.findFrom(name, this.functions)
-      || this.findFrom(name, this.classes)
-      || this.findFrom(name, this.enums)
-      ;
+          || this.findFrom(name, this.classes)
+          || this.findFrom(name, this.enums)
+          || this.findFrom(name, this.interfaces)
+          ;
   }
 
   updateVarNodes() {
@@ -1117,8 +1320,6 @@ export class ModuleLikeNode extends NamedNode {
     writer.unshift();
   }
 }
-
-
 
 export class ModuleNode extends ModuleLikeNode {
   constructor(name: string, astNode: ts.SourceFile) {
@@ -1450,29 +1651,67 @@ class BuildSemanticsContext extends ContextBase {
     this.module = module;
     this.push(module);
 
-    ts.forEachChild(sourceFile, (node) => {
-      switch(node.kind) {
-      case ts.SyntaxKind.ClassDeclaration:
-        this.buildClassDeclaration(node as ts.ClassDeclaration);
-        break;
-      case ts.SyntaxKind.MethodDeclaration:
-    this.buildMethodDeclaration(node as ts.MethodDeclaration);
-        break;
-      case ts.SyntaxKind.FunctionDeclaration:
-        this.buildFunctionDeclaration(node as ts.FunctionDeclaration);
-        break;
-      case ts.SyntaxKind.VariableStatement:
-    this.buildVariableStatement(node as ts.VariableStatement);
-    break;
-      case ts.SyntaxKind.EnumDeclaration:
-    this.buildEnumDeclaration(node as ts.EnumDeclaration);
-        break;
-      }
-    })
+    ts.forEachChild(sourceFile, (node) => { this.buildNode(node) });
 
     this.flushTasks();
   }
 
+  buildNode(node: ts.Node) {
+    //console.log(`=== buildNode ${nodeToString(node)}`);
+    switch(node.kind) {
+    case ts.SyntaxKind.ClassDeclaration:
+      this.buildClassDeclaration(node as ts.ClassDeclaration);
+      break;
+    case ts.SyntaxKind.InterfaceDeclaration:
+      this.buildInterfaceDeclaration(node as ts.InterfaceDeclaration);
+      break;
+    case ts.SyntaxKind.MethodDeclaration:
+      this.buildMethodDeclaration(node as ts.MethodDeclaration);
+      break;
+    case ts.SyntaxKind.FunctionDeclaration:
+      this.buildFunctionDeclaration(node as ts.FunctionDeclaration);
+      break;
+    case ts.SyntaxKind.VariableStatement:
+      this.buildVariableStatement(node as ts.VariableStatement);
+      break;
+    case ts.SyntaxKind.EnumDeclaration:
+      this.buildEnumDeclaration(node as ts.EnumDeclaration);
+      break;
+    case ts.SyntaxKind.ObjectLiteralExpression:
+      this.buildObjectLieralClass(node as ts.ObjectLiteralExpression);
+      break;
+    case ts.SyntaxKind.FunctionExpression:
+      this.buildFunctionExpression(node as ts.FunctionExpression);
+      break;
+    default:
+      ts.forEachChild(node, (node) => {this.buildNode(node)});
+      break;
+    }
+  }
+
+  buildObjectLieralClass(expr: ts.ObjectLiteralExpression) {
+    const clazz = new ClassNode(this.module.getTemporaryClassName(), expr, true);
+    //console.log("=== build clazz", clazz);
+    this.module.setTempClass(clazz, expr);
+    this.push(clazz);
+    for (const p of expr.properties) {
+      if (p.kind == ts.SyntaxKind.PropertyAssignment) {
+        const f = new FieldNode(p.name.getText(), PrimitiveValueType.Void, p);
+        clazz.add(f);
+      } else if (p.kind == ts.SyntaxKind.MethodDeclaration) {
+        this.buildMethodDeclaration(p as ts.MethodDeclaration);
+      }
+    }
+
+    this.pop();
+  }
+
+  buildFunctionExpression(func: ts.FunctionExpression) {
+    const m = new FunctionNode(func.name? func.name!.text : "", func);
+    this.addToModule(m);
+    this.buildFunctionLike(m, func);
+    this.module.setFunctionExpression(m, func);
+  }
 
   buildFunctionDeclaration(func: ts.FunctionDeclaration) {
     const m = new FunctionNode(func.name.text, func);
@@ -1489,6 +1728,20 @@ class BuildSemanticsContext extends ContextBase {
       for (const m of classDec.members) {
         this.buildClassLikeMember(m);
       }
+      this.pop();
+    });
+  }
+
+  buildInterfaceDeclaration(intfDec: ts.InterfaceDeclaration) {
+    const intf = new InterfaceNode(intfDec.name.text, intfDec);
+    this.addToModule(intf);
+
+    this.tasks.push(() => {
+      this.push(intf);
+      for (const m of intfDec.members) {
+        this.buildClassLikeMember(m);
+      }
+      //intf.updateFieldOffsets();
       this.pop();
     });
   }
@@ -1526,13 +1779,19 @@ class BuildSemanticsContext extends ContextBase {
     this.addToModule(enum_node);
   }
 
-  buildClassLikeMember(m: ts.ClassElement) {
+  buildClassLikeMember(m: ts.ClassElement | ts.TypeElement) {
     switch(m.kind) {
       case ts.SyntaxKind.MethodDeclaration:
         this.buildMethodDeclaration(m as ts.MethodDeclaration);
         break;
+      case ts.SyntaxKind.MethodSignature:
+        this.buildMethodSignature(m as ts.MethodSignature);
+        break;
       case ts.SyntaxKind.PropertyDeclaration:
-    this.buildPropertyDeclaration(m as ts.PropertyDeclaration);
+        this.buildPropertyDeclaration(m as ts.PropertyDeclaration);
+        break;
+      case ts.SyntaxKind.PropertySignature:
+        this.buildPropertySignature(m as ts.PropertySignature);
         break;
       case ts.SyntaxKind.Constructor:
         this.buildConstructor(m as ts.ConstructorDeclaration);
@@ -1542,7 +1801,13 @@ class BuildSemanticsContext extends ContextBase {
 
   buildMethodDeclaration(method: ts.MethodDeclaration) {
     const m = new MethodNode((method.name as ts.Identifier).text, method);
-    this.addTo(m, [SemanticsType.kClass, SemanticsType.kInterface]);
+    this.addTo(m, [SemanticsType.kClass, SemanticsType.kLiteralClass, SemanticsType.kInterface]);
+    this.buildFunctionLike(m, method);
+  }
+
+  buildMethodSignature(method: ts.MethodSignature) {
+    const m = new MethodNode(method.name.getText(), method);
+    this.addTo(m, [SemanticsType.kInterface]);
     this.buildFunctionLike(m, method);
   }
 
@@ -1552,7 +1817,7 @@ class BuildSemanticsContext extends ContextBase {
     this.buildFunctionLike(c, ctr);
   }
 
-  buildFunctionLike(m: FunctionLikeNode, method: ts.MethodDeclaration | ts.FunctionDeclaration | ts.ConstructorDeclaration) {
+  buildFunctionLike(m: FunctionLikeNode, method: ts.FunctionLikeDeclaration | ts.MethodSignature) {
     m.returnValueType = this.getValueTypeFrom(method.type)
 
     for (let i = 0; i < method.parameters.length; i ++) {
@@ -1566,6 +1831,11 @@ class BuildSemanticsContext extends ContextBase {
       param.is_dotdotdot = p.dotDotDotToken != undefined;
       m.addParameter(param);
     }
+
+    if (method.kind != ts.SyntaxKind.MethodSignature
+        && (method as ts.FunctionLikeDeclaration).body) {
+      ts.forEachChild((method as ts.FunctionLikeDeclaration).body, (node) => {this.buildNode(node)});
+    }
   }
 
   buildVariableStatement(varDec: ts.VariableStatement) {
@@ -1574,8 +1844,10 @@ class BuildSemanticsContext extends ContextBase {
 
       if (v.type) {
         value = this.getValueTypeFrom(v.type);
-      } else if (v.initializer) {
-        // TODO from initialize
+      }
+
+      if (v.initializer) {
+        this.buildNode(v.initializer);
       }
 
       const vnode = new VarNode((v.name as ts.Identifier).text, value, v);
@@ -1593,12 +1865,20 @@ class BuildSemanticsContext extends ContextBase {
     const field = new FieldNode((p.name as ts.Identifier).text, valueType, p);
     this.addTo(field, [SemanticsType.kClass, SemanticsType.kInterface]);
   }
+
+  buildPropertySignature(p: ts.PropertySignature) {
+    const value_type = this.getValueTypeFrom(p.type);
+
+    const field = new FieldNode(p.name.getText(), value_type, p);
+    this.addTo(field, [SemanticsType.kInterface]);
+  }
 }
 
 class CompilerContext extends ContextBase {
 
-  values: Value[];
+  values: Value[] = [];
   writer: Writer;
+  typeStack: ValueType[] = [];
   max_temporary: number;
   cur_temporary: number;
 
@@ -1633,6 +1913,21 @@ class CompilerContext extends ContextBase {
 
   createParameterValue(type: ValueType, value: Value) : ParameterValue {
     return new ParameterValue(type, this.incTemporary(), value);
+  }
+
+  pushPreType(valueType: ValueType) {
+    this.typeStack.push(valueType);
+  }
+
+  popPreType() {
+    if (this.typeStack.length > 0)
+      this.typeStack.pop();
+  }
+
+  getPreType() : ValueType | undefined {
+    const l = this.typeStack.length;
+    if (l > 0) return this.typeStack[l - 1];
+    return undefined;
   }
 
   compile() {
@@ -1703,26 +1998,26 @@ class CompilerContext extends ContextBase {
           value_type = f.type;
         }
 
-    if (!thiz_value) {
+        if (!thiz_value) {
           thiz_value = new ThisValue(<ObjectValueType> {
           kind: ValueTypeKind.kObject,
           clazz: clazz});
-    }
+        }
 
-    const left_value = new PropertyAccessValue(thiz_value, f);
+        const left_value = new PropertyAccessValue(thiz_value, f);
 
-    let right_value: Value;
-    if (this.isNeedReturnExpression(node.initializer.kind)) {
-      right_value = this.compileFunctionCallLikeExpression(node.initializer, left_value);
-    } else {
+        let right_value: Value;
+        if (this.isNeedReturnExpression(node.initializer.kind)) {
+         right_value = this.compileFunctionCallLikeExpression(node.initializer, left_value);
+        } else {
           right_value = this.compileExpression(node.initializer);
           this.values.push(new BinaryOpValue(left_value,
                   ts.SyntaxKind.EqualsToken,
                   right_value));
-    }
-    if (!node.type) {
+        }
+        if (!node.type) {
           f.type = right_value.type;
-    }
+        }
       }
     }
 
@@ -1730,10 +2025,13 @@ class CompilerContext extends ContextBase {
   }
 
   compileFunction(func: FunctionLikeNode) {
-    this.values = [];
-    this.push(func);
+    const start = this.values.length;
+    const max_temporary = this.max_temporary;
+    const cur_temporary = this.cur_temporary;
+
     this.max_temporary = 0;
     this.cur_temporary = 0;
+    this.push(func);
 
     console.log("===== build ", func.name, SemanticsType[func.kind], func.kind);
     if (func.kind == SemanticsType.kModuleInitializer) {
@@ -1762,7 +2060,10 @@ class CompilerContext extends ContextBase {
 
     if (func.kind == SemanticsType.kModuleInitializer)
       this.updateVars();
-    this.writer.writeFunction(func, this.values);
+    this.writer.writeFunction(func, this.values.slice(start));
+    this.values = this.values.slice(0, start);
+    this.max_temporary = max_temporary;
+    this.cur_temporary = cur_temporary;
   }
 
   compileFunctionStatement(n: ts.Node) {
@@ -1821,46 +2122,53 @@ class CompilerContext extends ContextBase {
       let value_type : ValueType = PrimitiveValueType.Any;
       if (v.type) {
         value_type = this.getValueTypeFrom(v.type);
+        this.pushPreType(value_type);
       }
 
       let value: VarValue | undefined = undefined;
 
       if (v.initializer) {
         value = new VarValue(value_type, StorageScope.kLocal, 0);
-    if (v.initializer.kind == ts.SyntaxKind.CallExpression) {
-      let new_value = this.compileCallExpression(v.initializer as ts.CallExpression, value);
-      if (!v.type){
-        value_type = new_value.type;
-        value.type = value_type; // reset the value type
-      }
-    } else {
+        if (v.initializer.kind == ts.SyntaxKind.CallExpression) {
+          let new_value = this.compileCallExpression(v.initializer as ts.CallExpression, value);
+          if (!v.type){
+            value_type = new_value.type;
+            value.type = value_type; // reset the value type
+          } else {
+            this.popPreType();
+          }
+        } else {
           const right = this.compileExpression(v.initializer);
-      console.log("=========++++ ", ValueTypeKind[right.type.kind]);
-      if (!v.type) {
-        value_type = right.type;
-        value.type = value_type; // reset the value type
-      }
+          console.log("=========++++ ", ValueTypeKind[right.type.kind]);
+          if (!v.type) {
+            value_type = right.type;
+            value.type = value_type; // reset the value type
+          } else {
+            this.popPreType();
+          }
           this.values.push(new BinaryOpValue(value, ts.SyntaxKind.EqualsToken, right));
-    }
+        }
+      } else {
+        this.popPreType();
       }
 
       if (this.isInModuleIntializer()) {
-         const top = this.getNode([SemanticsType.kModule, SemanticsType.kStdModule]);
-         const vnode = top.find((v.name as ts.Identifier).text);
-     console.log(`==== try find vnode: from top ${SemanticsType[top.kind]} with node: ${vnode}`);
-     if (vnode && vnode.kind == SemanticsType.kVar) {
-       if (!v.type)
+        const top = this.getNode([SemanticsType.kModule, SemanticsType.kStdModule]);
+        const vnode = top.find((v.name as ts.Identifier).text);
+        console.log(`==== try find vnode: from top ${SemanticsType[top.kind]} with node: ${vnode}`);
+        if (vnode && vnode.kind == SemanticsType.kVar) {
+          if (!v.type)
              (vnode as VarNode).type = value_type;
-       console.log("==== vnode type:", ValueTypeKind[(vnode as VarNode).type.kind]);
-       value.storage = (top.kind == SemanticsType.kModule ?
+          console.log("==== vnode type:", ValueTypeKind[(vnode as VarNode).type.kind]);
+          value.storage = (top.kind == SemanticsType.kModule ?
                    StorageScope.kModule : StorageScope.kGlobal);
-       value.index = vnode.index;
-       this.pushModuleVarUpdator(vnode as VarNode, value);
-     }
+          value.index = vnode.index;
+          this.pushModuleVarUpdator(vnode as VarNode, value);
+        }
       } else {
-        const vnode = new VarNode((v.name as ts.Identifier).text, value_type, v);
-        this.addTo(vnode, [SemanticsType.kBlock]);
-        value.index = vnode.index;
+         const vnode = new VarNode((v.name as ts.Identifier).text, value_type, v);
+         this.addTo(vnode, [SemanticsType.kBlock]);
+         value.index = vnode.index;
       }
     }
   }
@@ -1997,6 +2305,10 @@ class CompilerContext extends ContextBase {
         return this.compilePostfixUnaryExpression(expr as ts.PostfixUnaryExpression);
       case ts.SyntaxKind.ObjectLiteralExpression:
         return this.compileObjectLiteralExpression(expr as ts.ObjectLiteralExpression);
+      case ts.SyntaxKind.ObjectLiteralExpression:
+        return this.compileObjectLiteralExpression(expr as ts.ObjectLiteralExpression);
+      case ts.SyntaxKind.TemplateExpression:
+        return this.compileTemplateExpression(expr as ts.TemplateExpression);
       default:
         console.error(`unknown the expresstion: ${nodeToString(expr)}`);
     }
@@ -2014,45 +2326,98 @@ class CompilerContext extends ContextBase {
       const m = (thiz_value.type as ObjectValueType).clazz.find(name);
 
       if (!m) {
-     // TODO
-     console.error(`cannot resolve the ${name}`);
-     return new NoneValue();
+       // TODO
+       console.error(`cannot resolve the ${name}`);
+       return new NoneValue();
       }
 
       if (m.kind == SemanticsType.kMethod)
         return new PropertyAccessValue(thiz_value, m as MethodNode);
       else if (m.kind == SemanticsType.kField)
-    return new PropertyAccessValue(thiz_value, m as FieldNode);
+        return new PropertyAccessValue(thiz_value, m as FieldNode);
     } else {
       console.error(`compilePropertyAccessExpression this value type: ${ValueTypeKind[thiz_value.type.kind]}`);
     }
     return new NoneValue();
   }
 
+  compileTemplateExpression(expr: ts.TemplateExpression) : Value {
+    const tmpl = this.createTemporaryValue(PrimitiveValueType.String);
+    const start = this.cur_temporary;
+    const builder = new BuildStringValue(tmpl, expr.head.text);
+
+    for (const t of expr.templateSpans) {
+      builder.add(this.compileExpression(t.expression), t.literal.text);
+    }
+    this.values.push(builder);
+
+    this.cur_temporary = start;
+    return tmpl;
+  }
+
   compileObjectLiteralExpression(expr: ts.ObjectLiteralExpression) : Value {
-     const module = this.getNode([SemanticsType.kModule, SemanticsType.kStdModule]) as ModuleLikeNode;
-     const clazz = new ClassNode(module.getTemporaryClassName(), expr, true);
-     module.add(clazz);
-     const clazzType : ObjectValueType = {kind: ValueTypeKind.kObject, clazz: clazz};
-     const v = this.createTemporaryValue(clazzType);
-     // new object value
-     this.values.push(new BinaryOpValue(v, ts.SyntaxKind.EqualsToken,
+    const module = this.module;
+    let clazz = module.getTempClass(expr);
+    //console.log("=== get clazz", clazz);
+
+    const values: {p: FieldNode, v: Value}[] = [];
+    let i = 0;
+    for (const p of expr.properties) {
+      if (p.kind == ts.SyntaxKind.PropertyAssignment) {
+        const value = this.compileExpression(p.initializer);
+        const f = clazz.find(p.name.getText()) as FieldNode;
+        f.type = value.type;
+        values.push({p: f, v: value});
+      }
+      i ++;
+    }
+    (clazz as ClassNode).updateFieldOffsets();
+
+    let has_methods: boolean = false;
+    this.push(clazz);
+    for (const p of expr.properties) {
+      if (p.kind == ts.SyntaxKind.MethodDeclaration) {
+        const m = clazz.find(p.name.getText());
+        this.compileFunction(m as MethodNode);
+        has_methods = true;
+      }
+    }
+    this.pop();
+
+    if (!has_methods) {
+      const new_class = module.combineTempClass(clazz);
+      if (new_class) {
+        clazz = new_class;
+      } else { // remove the class
+        module.uploadTempClass(clazz);
+      }
+    } else {
+      module.uploadTempClass(clazz);
+    }
+
+    const pre_type = this.getPreType();
+    if (pre_type  && pre_type.kind == ValueTypeKind.kObject) {
+      clazz.addImplements((pre_type as ObjectValueType).clazz);
+    }
+
+    const clazzType : ObjectValueType = {kind: ValueTypeKind.kObject, clazz: clazz};
+    const v = this.createTemporaryValue(clazzType);
+    const start = this.cur_temporary;
+    // new object value
+    this.values.push(new BinaryOpValue(v, ts.SyntaxKind.EqualsToken,
                       NewValue.FromClazzType(clazzType, -1)));
-     for (const p of expr.properties) {
-       if (p.kind == ts.SyntaxKind.PropertyAssignment) {
-     const value = this.compileExpression(p.initializer);
-         const f = new FieldNode((p.name as ts.Identifier).text, value.type, p);
-     f.value = value;
-     clazz.add(f);
 
-     this.values.push(new BinaryOpValue(
-            new PropertyAccessValue(v, f),
-            ts.SyntaxKind.EqualsToken, value));
-       }
-     }
-     clazz.updateFieldOffsets();
 
-     return v;
+    for (const pv of values) {
+      this.values.push(new BinaryOpValue(
+          new PropertyAccessValue(v, pv.p),
+          ts.SyntaxKind.EqualsToken,
+          pv.v));
+    }
+
+    this.cur_temporary = start;
+
+    return v;
   }
 
   compileElementAccessExpression(expr: ts.ElementAccessExpression) : Value {
@@ -2111,7 +2476,7 @@ class CompilerContext extends ContextBase {
       if (this.isNeedReturnExpression(expr.right.kind)) {
     const left_value = this.compileExpression(expr.left);
         const right_value = this.compileFunctionCallLikeExpression(expr.right, left_value);
-    if (left_value.equal(right_value))
+    if (left_value.equals(right_value))
       return left_value;
 
     return new BinaryOpValue(left_value, expr.operatorToken.kind, right_value);
@@ -2140,9 +2505,11 @@ class CompilerContext extends ContextBase {
     for (const arg of args) {
       const arg_value = this.compileExpression(arg);
       const type = func.getParamterType(i);
+      this.pushPreType(type);
       if (arg_value.kind == ValueKind.kVar && ((arg_value as VarValue).storage == StorageScope.kTemporary)) {
         // in temporary
         if (type.kind == arg_value.type.kind) {
+          this.popPreType();
           continue; // same type, use the return result directly
         } else {
          // reuse the temporary
@@ -2152,6 +2519,7 @@ class CompilerContext extends ContextBase {
       const arg_target = this.createParameterValue(type, arg_value);
       i++;
       this.values.push(arg_target);
+      this.popPreType();
       //console.log(`parameter type ${ValueTypeKind[arg_target.type.kind]} value type: ${ValueTypeKind[arg_target.value.type.kind]}`);
     }
   }
