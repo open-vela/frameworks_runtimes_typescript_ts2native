@@ -50,6 +50,7 @@ import {
   NewValue,
   EnumValue,
   ElementAccessValue,
+  BuildStringValue,
   IsStroageValue,
   IfValue,
   ThenValue,
@@ -226,21 +227,21 @@ function CastTo(to: Value, from: Value, code: string) : string {
       break;
     case ValueTypeKind.kString:
       if (from.kind == ValueKind.kLiteral) {
-    if (from.type.kind == ValueTypeKind.kString)
+        if (from.type.kind == ValueTypeKind.kString)
           return `TS_STRING_NEW_STACK(__rt, ${code})`
         else
           return `TS_STRING_NEW_STACK(__rt, "${EscapeString(code)}")`
       }
       switch(from.type.kind) {
         case ValueTypeKind.kInt: return `ts_string_from_int(__rt, ${code}.ival)`;
-    case ValueTypeKind.kNumber: return `ts_string_from_double(__rt, ${code}.dval})`;
-    case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival})`;
-    case ValueTypeKind.kString:
-    case ValueTypeKind.kAny: return `${code}.object`;
-    default:
-      if (IsStroageValue(from)) return `ts_object_to_string(${code}.object)`;
-      return `ts_object_to_string(${code})`;
-      }
+        case ValueTypeKind.kNumber: return `ts_string_from_double(__rt, ${code}.dval)`;
+        case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival)`;
+        case ValueTypeKind.kString:
+        case ValueTypeKind.kAny: return `${code}.object`;
+        default:
+          if (IsStroageValue(from)) return `ts_object_to_string(${code}.object)`;
+            return `ts_object_to_string(${code})`;
+        }
       break;
     case ValueTypeKind.kAny:
     case ValueTypeKind.kArray:
@@ -250,7 +251,7 @@ function CastTo(to: Value, from: Value, code: string) : string {
      switch(from.type.kind) {
        case ValueTypeKind.kInt: return `TS_INT32_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
        case ValueTypeKind.kNumber: return `TS_DOUBLE_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
-       case ValueTypeKind.kString: return `TS_STRING_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
+       case ValueTypeKind.kString: return `${code}${GetValueSubValue(from)}`;
        case ValueTypeKind.kBoolean: return `TS_BOOLEAN_NEW_STACK(__rt, ${code}${GetValueSubValue(from)})`;
        default:
          if (IsStroageValue(from)) return `${code}.object`;
@@ -505,6 +506,7 @@ export class CCodeWriter implements Writer {
   }
 
   buildValue(value: Value) : string {
+    console.log(`== buildValue: kind: ${ValueKind[value.kind]}`);
     switch(value.kind) {
       case ValueKind.kVar:
         return this.buildVarValue(value as VarValue);
@@ -544,8 +546,35 @@ export class CCodeWriter implements Writer {
         return this.buildCaseValue(value as CaseValue);
       case ValueKind.KBreak:
         return `break`;
+      case ValueKind.kStringBuilder:
+        return this.buildStringBuilder(value as BuildStringValue);
     }
     return '';
+  }
+
+  buildStringBuilder(v: BuildStringValue) : string {
+    const builder_var = GetValueStorage(v.outValue);
+    let s = `ts_string_builder_new(&${builder_var}, "${EscapeString(v.head)}");`;
+    for (const span of v.spans) {
+      const expr = this.buildValue(span.value);
+      let build_type = 'add_object';
+      switch(span.value.type.kind) {
+        case ValueTypeKind.kNumber:
+          build_type = 'add_number';
+          break;
+        case ValueTypeKind.kBoolean:
+          build_type = 'add_boolean';
+          break;
+        case ValueTypeKind.kString:
+          if (span.value.kind == ValueKind.kLiteral)
+            build_type = 'add_cstr';
+          break;
+      }
+      s += `ts_string_builder_${build_type}(&${builder_var}, ${expr});`;
+      s += `ts_string_builder_add_cstr(&${builder_var}, "${EscapeString(span.literal)}");`;
+    }
+    s += `ts_string_builder_end(&${builder_var});`;
+    return s;
   }
 
   buildVarValue(v: VarValue) : string {
@@ -568,7 +597,7 @@ export class CCodeWriter implements Writer {
       console.log(`field: ${f.name} offset32: ${f.offset32}, offset64: ${f.offset64}`);
       if (f.offset32 >= 0) {
         // TODO get super size
-    const super_size = `sizeof(ts_object_t)`;
+        const super_size = `sizeof(ts_object_t)`;
         member_offset = `TS_OFFSET(void, ${GetObjectValue(v.thiz)}, ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64}))`
       } else {
         member_offset = `ts_field_of(${GetObjectValue(v.thiz)}, ${f.index})`;
@@ -797,14 +826,14 @@ export class CCodeWriter implements Writer {
     this.addSource(`  switch(index) {\n`);
     for (const m of c.members) {
       if (m.kind == SemanticsType.kField) {
-    const f = m as FieldNode;
-    this.addSource(`   case ${f.index}:\n`);
-    if (IsObjectValueType(f.type.kind)) {
-      this.addSource(`     ts_reset_object(&(value->object), *TS_OFFSET(ts_object_t*, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})));\n`);
-    } else {
-        this.addSource(`     (*value)${GetSubValueFromKind(f.type.kind)} =\n`);
-      this.addSource(`       *TS_OFFSET(${GetCTypeFromValueType(f.value.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64}));\n`);
-    }
+        const f = m as FieldNode;
+        this.addSource(`   case ${f.index}:\n`);
+        if (IsObjectValueType(f.type.kind)) {
+          this.addSource(`     ts_reset_object(&(value->object), *TS_OFFSET(ts_object_t*, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})));\n`);
+        } else {
+          this.addSource(`     (*value)${GetSubValueFromKind(f.type.kind)} =\n`);
+          this.addSource(`       *TS_OFFSET(${GetCTypeFromValueType(f.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64}));\n`);
+        }
        this.addSource(`     return 0;\n`);
       }
     }
@@ -825,7 +854,7 @@ export class CCodeWriter implements Writer {
         if (IsObjectValueType(f.type.kind)) {
           this.addSource(`     ts_reset_object(TS_OFFSET(ts_object_t*, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})), value.object);\n`);
         } else {
-          this.addSource(`     *TS_OFFSET(${GetCTypeFromValueType(f.value.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})) =\n`);
+          this.addSource(`     *TS_OFFSET(${GetCTypeFromValueType(f.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})) =\n`);
           this.addSource(`       value${GetSubValueFromKind(f.type.kind)};\n`);
         }
         this.addSource(`     return 0;\n`);
@@ -853,6 +882,7 @@ export class CCodeWriter implements Writer {
     this.writeLiteralClassGetter(c)
     this.writeLiteralClassSetter(c)
     this.writeLiteralClassKeyIterator(c)
+    const super_size = "sizeof(ts_object_t)"; // TODO super
 
     this.addSource(`static TS_VTABLE_DEF(_${c.name}_vt, 0) = {\n`);
     this.addSource(`  {\n`);
@@ -873,7 +903,16 @@ export class CCodeWriter implements Writer {
     this.addSource(`    NULL/*call by key*/,\n`);
     this.addSource(`    _ts_impl_${c.name}_iterator_next,\n`);
     this.addSource(`  },\n`);
-    this.addSource(` {}\n`);
+    this.addSource(` {\n`);
+    for (const m of c.members) {
+      if (m.kind == SemanticsType.kMethod) {
+        this.addSource(`    {.method = (ts_call_t)(${GetFunctionImplName(m as MethodNode)})},\n`);
+      } else if (m.kind == SemanticsType.kField) {
+    const f = m as FieldNode;
+        this.addSource(`    {.field = ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64})},\n`);
+      }
+    }
+    this.addSource(`  }\n`);
     this.addSource(`};\n`);
   }
 
