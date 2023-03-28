@@ -134,8 +134,8 @@ function GetSubValueFromKind(kind: ValueTypeKind) : string {
       subvalue = '.ival';
       break;
     case ValueTypeKind.kAny:
-      subvalue = '/*Any*/';
-      break;
+      //subvalue = '/*Any*/';
+      //break;
     default:
       subvalue = '.object';
       break;
@@ -149,16 +149,25 @@ function GetCTypeFromValueType(kind: ValueTypeKind) : string {
     case ValueTypeKind.kNumber: return 'double';
     case ValueTypeKind.kBoolean: return 'ts_boolean_t';
     case ValueTypeKind.kString:
+    default:
+      if (IsObjectValueType(kind))
+        return 'ts_object_t*';
+      return 'void';
+  }
+}
+
+function IsObjectValueType(kind: ValueTypeKind) {
+  switch(kind) {
+    case ValueTypeKind.kString:
     case ValueTypeKind.kAny:
     case ValueTypeKind.kObject:
     case ValueTypeKind.kFunction:
     case ValueTypeKind.kMap:
     case ValueTypeKind.kSet:
     case ValueTypeKind.kUnion:
-      return 'ts_object_t*';
-    default:
-      return 'void';
+      return true;
   }
+  return false;
 }
 
 
@@ -183,54 +192,54 @@ function CastTo(to: Value, from: Value, code: string) : string {
     case ValueTypeKind.kInt:
       switch(from.type.kind) {
         case ValueTypeKind.kNumber: return `(int)(${code}${GetValueSubValue(from)})`;
-	case ValueTypeKind.kBoolean: return `${code}${GetValueSubValue(from)}`;
-	case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
-	case ValueTypeKind.kString:
-	  if (from.kind == ValueKind.kLiteral) return `atoi(${code})`;
-	  //fall through
-	case ValueTypeKind.kArray:
-	case ValueTypeKind.kMap:
-	case ValueTypeKind.kSet:
-	case ValueTypeKind.kObject: {
-          return `ts_object_to_int(${code}.object, 0)` 
-	}
-	default:
-	  return code;
+    case ValueTypeKind.kBoolean: return `${code}${GetValueSubValue(from)}`;
+    case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
+    case ValueTypeKind.kString:
+      if (from.kind == ValueKind.kLiteral) return `atoi(${code})`;
+      //fall through
+    case ValueTypeKind.kArray:
+    case ValueTypeKind.kMap:
+    case ValueTypeKind.kSet:
+    case ValueTypeKind.kObject: {
+          return `ts_object_to_int(${code}.object, 0)`
+    }
+    default:
+      return code;
       }
       break;
-    case ValueTypeKind.kNumber: 
+    case ValueTypeKind.kNumber:
       switch(from.type.kind) {
         case ValueTypeKind.kInt: return `(double)(${code}${GetValueSubValue(from)})`;
         case ValueTypeKind.kNumber: return `${code}${GetValueSubValue(from)}`;
-	case ValueTypeKind.kBoolean: return `(double)((${code}${GetValueSubValue(from)} == 0 ? 0 : 1.0))`;
-	case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
-	case ValueTypeKind.kString:
+    case ValueTypeKind.kBoolean: return `(double)((${code}${GetValueSubValue(from)} == 0 ? 0 : 1.0))`;
+    case ValueTypeKind.kAny: return `${code}${GetValueSubValue(to)}`;
+    case ValueTypeKind.kString:
           if (from.kind == ValueKind.kLiteral) return `strtod(${code}, NULL)`;
-	case ValueTypeKind.kArray:
-	case ValueTypeKind.kMap:
-	case ValueTypeKind.kSet:
+    case ValueTypeKind.kArray:
+    case ValueTypeKind.kMap:
+    case ValueTypeKind.kSet:
         case ValueTypeKind.kObject:
           if (IsStroageValue(from)) return `ts_object_to_number(${code}.object, 0.0)`;
-	default:
+    default:
           return code;
-      } 
+      }
       break;
     case ValueTypeKind.kString:
       if (from.kind == ValueKind.kLiteral) {
-	if (from.type.kind == ValueTypeKind.kString)
+    if (from.type.kind == ValueTypeKind.kString)
           return `TS_STRING_NEW_STACK(__rt, ${code})`
         else
           return `TS_STRING_NEW_STACK(__rt, "${EscapeString(code)}")`
       }
       switch(from.type.kind) {
         case ValueTypeKind.kInt: return `ts_string_from_int(__rt, ${code}.ival)`;
-	case ValueTypeKind.kNumber: return `ts_string_from_double(__rt, ${code}.dval})`;
-	case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival})`;
-	case ValueTypeKind.kString:
-	case ValueTypeKind.kAny: return `${code}.object`;
-	default:
-	  if (IsStroageValue(from)) return `ts_object_to_string(${code}.object)`;
-	  return `ts_object_to_string(${code})`;
+    case ValueTypeKind.kNumber: return `ts_string_from_double(__rt, ${code}.dval})`;
+    case ValueTypeKind.kBoolean: return `ts_string_from_boolean(__rt, ${code}.ival})`;
+    case ValueTypeKind.kString:
+    case ValueTypeKind.kAny: return `${code}.object`;
+    default:
+      if (IsStroageValue(from)) return `ts_object_to_string(${code}.object)`;
+      return `ts_object_to_string(${code})`;
       }
       break;
     case ValueTypeKind.kAny:
@@ -382,8 +391,11 @@ function GetFunctionImplName(func: FunctionLikeNode) : string {
 
 function GetFunctionReturnType(func: FunctionLikeNode) : string {
   const rettype = func.returnValueType;
+  return GetTSValueType(rettype.kind);
+}
 
-  switch(rettype.kind) {
+function GetTSValueType(kind: ValueTypeKind) : string {
+  switch(kind) {
     case ValueTypeKind.kVoid:
     case ValueTypeKind.kUndefined:
     case ValueTypeKind.kNull:
@@ -393,6 +405,8 @@ function GetFunctionReturnType(func: FunctionLikeNode) : string {
       return 'ts_value_int';
     case ValueTypeKind.kNumber:
       return 'ts_value_double';
+    case ValueTypeKind.kBoolean:
+      return 'ts_value_boolean';
     case ValueTypeKind.kString:
     case ValueTypeKind.kArray:
     case ValueTypeKind.kMap:
@@ -454,7 +468,7 @@ export class CCodeWriter implements Writer {
     this.addSource("#include <ts_std.h>\n");
 
     this.buildEnumDefines();
-  } 
+  }
 
   setClass(c: ClassNode) {
     this.clazz = c;
@@ -497,23 +511,23 @@ export class CCodeWriter implements Writer {
       case ValueKind.kLiteral:
         return this.buildLiteralValue(value as LiterialValue);
       case ValueKind.kBinaryOp:
-	return this.buildBinaryOpValue(value as BinaryOpValue);
+        return this.buildBinaryOpValue(value as BinaryOpValue);
       case ValueKind.KUnaryOp:
-  return this.buildUnaryOpValue(value as UnaryOpValue);
+        return this.buildUnaryOpValue(value as UnaryOpValue);
       case ValueKind.kCall:
-	return this.buildCallValue(value as FunctionCallValue);
+        return this.buildCallValue(value as FunctionCallValue);
       case ValueKind.kParameter:
         return this.buildParameterValue(value as ParameterValue);
       case ValueKind.kReturn:
-	return `return ${(value as ReturnValue).retCode}`;
+        return `return ${(value as ReturnValue).retCode}`;
       case ValueKind.kThis:
-	return 'self';
+        return 'self';
       case ValueKind.kNew:
-	return this.buildNew(value as NewValue);
+        return this.buildNew(value as NewValue);
       case ValueKind.kPropertyAccess:
         return this.buildPropertyAccessValue(value as PropertyAccessValue);
       case ValueKind.kElementAccess:
-	return this.buildElementAccess(value as ElementAccessValue);
+        return this.buildElementAccess(value as ElementAccessValue);
       case ValueKind.KIf:
         return this.buildIfValue(value as IfValue);
       case ValueKind.KThen:
@@ -539,7 +553,11 @@ export class CCodeWriter implements Writer {
   }
 
   buildNew(v: NewValue) : string {
-    return `ts_new_object(__rt, &${GetValueStorage(v.clazzValue)}, &__temporary[${v.param_start}])`;
+    if (v.param_start >= 0) {
+      return `ts_new_object(__rt, &${GetValueStorage(v.clazzValue)}, &__temporary[${v.param_start}])`;
+    } else {
+      return `ts_new_object(__rt, &${GetValueStorage(v.clazzValue)}, NULL)`;
+    }
   }
 
   buildPropertyAccessValue(v: PropertyAccessValue) : string {
@@ -550,7 +568,7 @@ export class CCodeWriter implements Writer {
       console.log(`field: ${f.name} offset32: ${f.offset32}, offset64: ${f.offset64}`);
       if (f.offset32 >= 0) {
         // TODO get super size
-	const super_size = `sizeof(ts_object_t)`;
+    const super_size = `sizeof(ts_object_t)`;
         member_offset = `TS_OFFSET(void, ${GetObjectValue(v.thiz)}, ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64}))`
       } else {
         member_offset = `ts_field_of(${GetObjectValue(v.thiz)}, ${f.index})`;
@@ -578,8 +596,10 @@ export class CCodeWriter implements Writer {
       case ValueTypeKind.kNumber:
       case ValueTypeKind.kInt:
         return `${v.value}`;
+      case ValueTypeKind.kBoolean:
+    return `${v.value as boolean ? 'ts_true' : 'ts_false'}`;
       case ValueTypeKind.kString:
-	return `"${EscapeString(v.value as string)}"`;
+    return `"${EscapeString(v.value as string)}"`;
     }
     return '';
   }
@@ -653,7 +673,12 @@ export class CCodeWriter implements Writer {
     // write functions, class and module
 
     for (const c of this.module.classes) {
-      this.writeClassDefine(c);
+      if (c.kind == SemanticsType.kClass)
+        this.writeClassDefine(c);
+      else if (c.kind == SemanticsType.kLiteralClass)
+    this.writeLiteralClassDefine(c);
+      else if (c.kind == SemanticsType.kInterface)
+    this.writeInterfaceDefine(c);
     }
 
     for (const f of this.module.functions) {
@@ -670,7 +695,7 @@ export class CCodeWriter implements Writer {
   buildEnumDefines() {
     for (const e of this.module.enums) {
       for (const m of e.members) {
-	if (typeof m.value == 'number')
+    if (typeof m.value == 'number')
           this.addSource(`const int enum_member_${e.name}_${m.name} = ${m.value};\n`);
         else
           this.addSource(`const char enum_member_${e.name}_${m.name}[] = "${EscapeString(m.value)}";\n`);
@@ -683,7 +708,7 @@ export class CCodeWriter implements Writer {
     if (e.type.kind == ValueTypeKind.kInt || e.type.kind == ValueTypeKind.kUnion) {
       this.addSource(`  switch((int)v) {\n`);
       for (const m of e.members) {
-	if (typeof m.value == 'number')
+    if (typeof m.value == 'number')
           this.addSource(`    case ${m.value}: return "${EscapeString(m.name)}";\n`);
       }
       this.addSource(`  }\n`);
@@ -693,9 +718,9 @@ export class CCodeWriter implements Writer {
       for (const m of e.members) {
         if (typeof m.value == 'string') {
           this.addSource(`  if (str_v == enum_member_${e.name}_${m.name}
-				|| strcmp(str_v, enum_member_${e.name}_${m.name}) == 0)\n`);
+                || strcmp(str_v, enum_member_${e.name}_${m.name}) == 0)\n`);
           this.addSource(`    return "${EscapeString(m.name)}";\n`);
-	}
+    }
       }
     }
     this.addSource('  return "";\n');
@@ -732,12 +757,128 @@ export class CCodeWriter implements Writer {
       if (m.kind == SemanticsType.kMethod) {
         this.addSource(`    {.method = (ts_call_t)(${GetFunctionImplName(m as MethodNode)})},\n`);
       } else if (m.kind == SemanticsType.kField) {
-	const f = m as FieldNode;
+    const f = m as FieldNode;
         this.addSource(`    {.field = ${super_size} + TS_SIZE_32_64(${f.offset32}, ${f.offset64})},\n`);
       }
     }
     this.addSource(`  }\n`);
     this.addSource(`};\n`);
+  }
+
+  writeLiteralClassMemberNameInfo(c: ClassNode) {
+    this.addSource(`static struct { const char* name; int type; } _ts_${c.name}_key_infos[] = {\n`);
+    for (const m of c.members) {
+      this.addSource(`  {"${m.name}",`);
+      if (m.kind == SemanticsType.kMethod) {
+        this.addSource(` -1},\n`);
+      } else if (m.kind == SemanticsType.kField) {
+        this.addSource(` ${GetTSValueType((m as FieldNode).type.kind)}},\n`);
+      }
+    }
+    this.addSource(`};\n`);
+
+    this.addSource(`static int _ts_impl_${c.name}_key_to_index(ts_key_t key) {\n`);
+    this.addSource(`  if (key.type == ts_index_key) return key.idx;\n`);
+    this.addSource(`  if (key.type == ts_string_key) {\n`);
+    this.addSource(`    for (int idx = 0; idx < sizeof(_ts_${c.name}_key_infos) / sizeof(_ts_${c.name}_key_infos[0]); idx++) {\n`);
+    this.addSource(`      if (strcmp(_ts_${c.name}_key_infos[idx].name, key.str) == 0)  return idx;\n`)
+    this.addSource(`    }\n`);
+    this.addSource(`  }\n`);
+    this.addSource(`  return -1;\n`);
+    this.addSource(`}\n`);
+  }
+
+
+  writeLiteralClassGetter(c: ClassNode) {
+    this.addSource(`static int _ts_impl_${c.name}_get_by_key(ts_object_t* self, ts_key_t key, ts_value_t* value) {\n`);
+    this.addSource(`  int index = _ts_impl_${c.name}_key_to_index(key);\n`);
+    this.addSource(`  if (index < 0) return -1;\n`);
+
+    this.addSource(`  switch(index) {\n`);
+    for (const m of c.members) {
+      if (m.kind == SemanticsType.kField) {
+    const f = m as FieldNode;
+    this.addSource(`   case ${f.index}:\n`);
+    if (IsObjectValueType(f.type.kind)) {
+      this.addSource(`     ts_reset_object(&(value->object), *TS_OFFSET(ts_object_t*, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})));\n`);
+    } else {
+        this.addSource(`     (*value)${GetSubValueFromKind(f.type.kind)} =\n`);
+      this.addSource(`       *TS_OFFSET(${GetCTypeFromValueType(f.value.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64}));\n`);
+    }
+       this.addSource(`     return 0;\n`);
+      }
+    }
+    this.addSource(`    default: return -1;\n  }\n`);
+
+    this.addSource(`  return -1;\n}\n`);
+  }
+
+  writeLiteralClassSetter(c: ClassNode) {
+    this.addSource(`static int _ts_impl_${c.name}_set_by_key(ts_object_t* self, ts_key_t key, ts_value_t value) {\n`);
+    this.addSource(`  int index = _ts_impl_${c.name}_key_to_index(key);\n`);
+    this.addSource(`  if (index < 0) return -1;\n`);
+    this.addSource(`  switch(index) {\n`);
+    for (const m of c.members) {
+      if (m.kind == SemanticsType.kField) {
+        const f = m as FieldNode;
+        this.addSource(`   case ${f.index}:\n`);
+        if (IsObjectValueType(f.type.kind)) {
+          this.addSource(`     ts_reset_object(TS_OFFSET(ts_object_t*, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})), value.object);\n`);
+        } else {
+          this.addSource(`     *TS_OFFSET(${GetCTypeFromValueType(f.value.type.kind)}, self, sizeof(ts_object_t) + TS_SIZE_32_64(${f.offset32}, ${f.offset64})) =\n`);
+          this.addSource(`       value${GetSubValueFromKind(f.type.kind)};\n`);
+        }
+        this.addSource(`     return 0;\n`);
+      }
+    }
+    this.addSource(`    default: return -1;\n  }\n`);
+
+    this.addSource(`  return -1;\n}\n`);
+  }
+
+  writeLiteralClassKeyIterator(c: ClassNode) {
+    this.addSource(`static int _ts_impl_${c.name}_iterator_next(ts_object_t* self, ts_key_iterator_t* it) {\n`);
+    this.addSource(`  if (it->indexKey < 0) it->indexKey = 0;\n`);
+    this.addSource(`  else it->indexKey ++;\n`);
+    this.addSource(`  if (it->indexKey >= (int)sizeof(_ts_${c.name}_key_infos)/sizeof(_ts_${c.name}_key_infos[0])) return 0;\n`);
+    this.addSource(`  it->strKey = _ts_${c.name}_key_infos[it->indexKey].name;\n`);
+    this.addSource(`  it->type = _ts_${c.name}_key_infos[it->indexKey].type;\n`);
+    this.addSource(`  return 1;\n`);
+
+    this.addSource(`}\n`);
+  }
+
+  writeLiteralClassDefine(c: ClassNode) {
+    this.writeLiteralClassMemberNameInfo(c);
+    this.writeLiteralClassGetter(c)
+    this.writeLiteralClassSetter(c)
+    this.writeLiteralClassKeyIterator(c)
+
+    this.addSource(`static TS_VTABLE_DEF(_${c.name}_vt, 0) = {\n`);
+    this.addSource(`  {\n`);
+    this.addSource(`    TS_VTABLE_THIS_INTERFACE_ENTRY,\n`);
+    this.addSource(`    "${c.name}",\n`);
+    this.addSource(`    NULL,/*super*/\n`);
+    this.addSource(`    sizeof(ts_object_t) + TS_SIZE_32_64(${c.fieldSize32},${c.fieldSize64}),\n`);
+    this.addSource(`    0,/*interface count*/\n`);
+    this.addSource(`    ts_object_object,\n`);
+    this.addSource(`    ts_value_void,\n`);
+    this.addSource(`    0,/*member count*/\n`);
+    this.addSource(`    NULL,/*ctr*/\n`);
+    this.addSource(`    NULL,/*TODO destroy*/\n`);
+    this.addSource(`    NULL,/*TODO to_str*/\n`);
+    this.addSource(`    NULL,/*TODO visitor*/\n`);
+    this.addSource(`    _ts_impl_${c.name}_get_by_key,\n`);
+    this.addSource(`    _ts_impl_${c.name}_set_by_key,\n`);
+    this.addSource(`    NULL/*call by key*/,\n`);
+    this.addSource(`    _ts_impl_${c.name}_iterator_next,\n`);
+    this.addSource(`  },\n`);
+    this.addSource(` {}\n`);
+    this.addSource(`};\n`);
+  }
+
+  writeInterfaceDefine(c: ClassNode) {
+
   }
 
   writeModuleDefine() {
