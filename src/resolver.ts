@@ -192,7 +192,7 @@ export class VarValue extends Value {
   equal(v: Value) : boolean {
     return (this.kind == v.kind)
          && (this.storage == (v as VarValue).storage)
-	 && (this.index == (v as VarValue).index);
+     && (this.index == (v as VarValue).index);
   }
 }
 
@@ -205,7 +205,7 @@ export class ParameterValue extends Value {
     this.storage = StorageScope.kTemporary;
     this.index = index;
     this.value = value;
-  } 
+  }
 
   equal(v: Value) : boolean {
     if (super.equal(v)) {
@@ -232,7 +232,6 @@ export class LiterialValue extends Value {
     this.value = value;
   }
 }
-
 
 export class FunctionValue extends Value {
   storage: StorageScope;
@@ -338,7 +337,7 @@ export class BinaryOpValue extends Value {
       const b = v as BinaryOpValue;
       return b.op == this.op
            && this.left.equal(b.left)
-	   && this.right.equal(b.right);
+       && this.right.equal(b.right);
     }
     return false;
   }
@@ -354,7 +353,7 @@ export class ReturnValue extends Value {
 export function IsLeftValue(value: Value) {
   return value.kind == ValueKind.kVar
         || value.kind == ValueKind.kParameter
-	|| value.kind == ValueKind.kPropertyAccess;
+    || value.kind == ValueKind.kPropertyAccess;
 }
 
 function GetMemberValueType(m: MemberNode | EnumMemberNode) : ValueType {
@@ -373,8 +372,8 @@ function GetMemberValueType(m: MemberNode | EnumMemberNode) : ValueType {
 
 export class PropertyAccessValue extends Value {
   thiz: Value;
-  member: MemberNode | EnumMemberNode; 
-  
+  member: MemberNode | EnumMemberNode;
+
   constructor(thiz: Value, member: MemberNode|EnumMemberNode) {
     super(ValueKind.kPropertyAccess, GetMemberValueType(member));
     this.thiz = thiz;
@@ -476,10 +475,10 @@ export function IsStroageValue(v: Value) : boolean {
 const kCustroumerMemberStart = 4;
 
 export interface Writer {
-  setModule(m: ModuleNode); 
+  setModule(m: ModuleNode);
   setClass(c: ClassNode);
 
-  writeFunction(func: FunctionLikeNode, values: Value[]); 
+  writeFunction(func: FunctionLikeNode, values: Value[]);
   //writeFragements(stack: FragmentNode[]);
   finish();
 }
@@ -487,22 +486,23 @@ export interface Writer {
 function isEqualOperator(kind: ts.BinaryOperator) {
   return kind == ts.SyntaxKind.EqualsToken
         || kind == ts.SyntaxKind.PlusEqualsToken
-	|| kind == ts.SyntaxKind.MinusEqualsToken
-	|| kind == ts.SyntaxKind.AsteriskAsteriskEqualsToken
-	|| kind == ts.SyntaxKind.AsteriskEqualsToken
-	|| kind == ts.SyntaxKind.SlashEqualsToken
-	|| kind == ts.SyntaxKind.PercentEqualsToken
-	|| kind == ts.SyntaxKind.AmpersandEqualsToken
-	|| kind == ts.SyntaxKind.CaretEqualsToken
-	|| kind == ts.SyntaxKind.LessThanLessThanEqualsToken
-	|| kind == ts.SyntaxKind.GreaterThanGreaterThanToken
-	|| kind == ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken;
+    || kind == ts.SyntaxKind.MinusEqualsToken
+    || kind == ts.SyntaxKind.AsteriskAsteriskEqualsToken
+    || kind == ts.SyntaxKind.AsteriskEqualsToken
+    || kind == ts.SyntaxKind.SlashEqualsToken
+    || kind == ts.SyntaxKind.PercentEqualsToken
+    || kind == ts.SyntaxKind.AmpersandEqualsToken
+    || kind == ts.SyntaxKind.CaretEqualsToken
+    || kind == ts.SyntaxKind.LessThanLessThanEqualsToken
+    || kind == ts.SyntaxKind.GreaterThanGreaterThanToken
+    || kind == ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken;
 }
 
 export enum SemanticsType {
   kModule,
   kStdModule,
   kClass,
+  kLiteralClass,
   kInterface,
   kEnum,
   kEnumMember,
@@ -598,7 +598,7 @@ export class BlockLikeNode extends SemanticsNode {
       for (const l of this.locals) {
         l.index += start;
       }
-    } 
+    }
 
     start += this.locals.length;
 
@@ -607,12 +607,12 @@ export class BlockLikeNode extends SemanticsNode {
       let max_count = start;
       for (const b of this.subBlocks) {
         var_count = b.calcLocals(start);
-	if (var_count > max_count) max_count = var_count;
+        if (var_count > max_count) max_count = var_count;
       }
       start += max_count;
     } else {
       for (const b of this.subBlocks) {
-        start += b.calcLocals(start);  
+        start += b.calcLocals(start);
       }
     }
     return start;
@@ -676,18 +676,18 @@ class ClosureDataNode extends NamedNode {
   constructor(reference: ClosureableDataNode|ClosureDataNode, astNode: ts.Node) {
     super(SemanticsType.kClosure, reference.name, astNode);
     this.type = reference.type;
-  } 
+  }
 
   dump(writer: DumpWriter) {
     writer.writeLine(`ClosuerData ${this.name}@${this.index} ${ValueTypeToString(this.type)}`);
-  } 
+  }
 }
 
 export class EnumMemberNode extends NamedNode {
   value: string | number;
   constructor(name: string, value: string | number, node: ts.Node) {
     super(SemanticsType.kEnumMember, name, node);
-    this. value = value; 
+    this. value = value;
   }
 }
 
@@ -707,15 +707,15 @@ export class EnumNode extends NamedNode {
       if (typeof mn.value == 'string') {
         if (this.type.kind == ValueTypeKind.kUndefined) {
           this.type = PrimitiveValueType.String;
-	} else if (this.type.kind == ValueTypeKind.kInt) {
+    } else if (this.type.kind == ValueTypeKind.kInt) {
           this.type = IntStringUnion;
-	}
+    }
       } else {
         if (this.type.kind == ValueTypeKind.kUndefined) {
           this.type = PrimitiveValueType.Int;
-	} else if (this.type.kind == ValueTypeKind.kString) {
+    } else if (this.type.kind == ValueTypeKind.kString) {
           this.type = IntStringUnion;
-	}
+    }
       }
     }
   }
@@ -757,12 +757,12 @@ export class FunctionLikeNode extends NamedNode {
       return this.params[i].type;
     }
     if (i < 0) return PrimitiveValueType.Void;
-    
+
     const last = this.params[this.params.length-1];
     if (last.is_dotdotdot) {
       if (last.type.kind == ValueTypeKind.kArray) {
         return (last.type as ArrayValueType).element;
-      } 
+      }
     }
     return PrimitiveValueType.Any;
   }
@@ -770,7 +770,7 @@ export class FunctionLikeNode extends NamedNode {
   addParameter(p: ParameterNode) {
     p.parent = this;
     p.index = this.params.length;
-    this.params.push(p); 
+    this.params.push(p);
     this.param_count = this.params.length;
   }
 
@@ -861,6 +861,7 @@ export class ConstructorNode extends FunctionLikeNode {
 
 export class FieldNode extends NamedNode {
   type: ValueType;
+  value?: Value;
   offset32: number;
   offset64: number;
 
@@ -879,11 +880,11 @@ export class FieldNode extends NamedNode {
 
 export type MemberNode = MethodNode | FieldNode;
 
-type ClassLikeNodeType = SemanticsType.kClass | SemanticsType.kInterface;
+type ClassLikeNodeType = SemanticsType.kClass | SemanticsType.kInterface | SemanticsType.kLiteralClass;
 
 class ClassLikeNode extends NamedNode {
   members: MemberNode[] = [];
-  
+
   constructor(kind: ClassLikeNodeType, name: string, astNode: ts.Node) {
     super(kind, name, astNode);
   }
@@ -947,8 +948,9 @@ export class ClassNode extends ClassLikeNode {
   fieldSize32: number = 0;
   fieldSize64: number = 0;
 
-  constructor(name: string, astNode: ts.Node) {
-    super(SemanticsType.kClass, name, astNode);
+  constructor(name: string, astNode: ts.Node, is_literal: boolean = false) {
+    super(is_literal ? SemanticsType.kLiteralClass : SemanticsType.kClass,
+      name, astNode);
   }
 
   getConstructor() : ConstructorNode | undefined { return this.ctr; }
@@ -1029,6 +1031,10 @@ export class ModuleLikeNode extends NamedNode {
     console.log("=== initalize:", SemanticsType[this.initialize.kind]);
   }
 
+  getTemporaryClassName() : string {
+    return `__temp${this.classes.length + 1}`;
+  }
+
   addTo(nodes: SemanticsNode[], n: SemanticsNode) {
     n.index = nodes.length;
     nodes.push(n);
@@ -1038,19 +1044,21 @@ export class ModuleLikeNode extends NamedNode {
   add(n: SemanticsNode) {
     switch(n.kind) {
       case SemanticsType.kClass:
+      case SemanticsType.kLiteralClass:
         this.addTo(this.classes, n);
         break;
       case SemanticsType.kFunction:
-	this.addTo(this.functions, n);
+    this.addTo(this.functions, n);
         break;
       case SemanticsType.kVar:
-	this.addTo(this.vars, n);
+    this.addTo(this.vars, n);
         break;
       case SemanticsType.kEnum:
-	this.addTo(this.enums, n);
+    this.addTo(this.enums, n);
+        break;
       default:
-	// TODO ERROR
-	break;
+    // TODO ERROR
+    break;
     }
   }
 
@@ -1071,9 +1079,9 @@ export class ModuleLikeNode extends NamedNode {
   find(name: string) : SemanticsNode | undefined {
     return this.findFrom(name, this.vars)
           || this.findFrom(name, this.functions)
-	  || this.findFrom(name, this.classes)
-	  || this.findFrom(name, this.enums)
-	  ;
+      || this.findFrom(name, this.classes)
+      || this.findFrom(name, this.enums)
+      ;
   }
 
   updateVarNodes() {
@@ -1082,10 +1090,10 @@ export class ModuleLikeNode extends NamedNode {
 
     for (const v of this.vars) {
       if (v.usedByClosure) {
-	v.index = vars.length;
+    v.index = vars.length;
         vars.push(v);
       } else {
-	v.index = localvars.length;
+    v.index = localvars.length;
         localvars.push(v);
       }
     }
@@ -1095,7 +1103,7 @@ export class ModuleLikeNode extends NamedNode {
   }
 
   dump(writer: DumpWriter) {
-    writer.writeLine(`Module name: ${this.name} ${(this.astNode as ts.SourceFile).fileName}`); 
+    writer.writeLine(`Module name: ${this.name} ${(this.astNode as ts.SourceFile).fileName}`);
     writer.shift();
     this.initialize.dump(writer);
     for (const c of this.classes)
@@ -1162,7 +1170,7 @@ class ContextBase {
     for (let i = this.stacks.length - 1; i >= 0; i--) {
       if (types.indexOf(this.stacks[i].kind) >= 0) {
         p = this.stacks[i];
-	break;
+    break;
       }
     }
 
@@ -1182,7 +1190,7 @@ class ContextBase {
       if (node && check(node.kind)) {
         break;
       }
-    } 
+    }
 
     if (!node) {
       console.error(`resolve "${name}" failed: no such name`);
@@ -1195,21 +1203,21 @@ class ContextBase {
       case SemanticsType.kParamter:
         return this.createVarValue(node as ClosureableDataNode, i);
       case SemanticsType.kFunction: {
-	const p = this.stacks[i];
-	let storage = StorageScope.kModule;
-	if (p.kind == SemanticsType.kModule)
+    const p = this.stacks[i];
+    let storage = StorageScope.kModule;
+    if (p.kind == SemanticsType.kModule)
           storage = StorageScope.kModule;
         else if (p.kind == SemanticsType.kStdModule)
           storage = StorageScope.kGlobal;
         else {
           // TODO
-	}
+    }
         return new FunctionValue(node as FunctionNode, storage, node.index);
       }
       case SemanticsType.kEnum: {
-        return new EnumValue(node as EnumNode, 
+        return new EnumValue(node as EnumNode,
                    node.parent.kind == SemanticsType.kModule ?
-			StorageScope.kModule : StorageScope.kGlobal);
+            StorageScope.kModule : StorageScope.kGlobal);
       }
     }
     console.error(`resolve "${name}" unknown type ${SemanticsType[node.kind]}`);
@@ -1225,7 +1233,7 @@ class ContextBase {
       if (node && isClassLikeValue(node.kind)) {
         break;
       }
-    } 
+    }
 
     if (i >= 0) {
       return new ThisValue({kind: ValueTypeKind.kObject, clazz: node as ClassLikeNode});
@@ -1238,9 +1246,9 @@ class ContextBase {
     // we only release from module or stdModule
     let i = 0;
     for (; i < this.stacks.length &&
-	     (this.stacks[i].kind == SemanticsType.kStdModule
+         (this.stacks[i].kind == SemanticsType.kStdModule
              || this.stacks[i].kind == SemanticsType.kModule);
-	   i++);
+       i++);
 
     debug(`resolveType name: ${name} from ${i}`);
     let node: SemanticsNode | undefined = undefined;
@@ -1257,8 +1265,8 @@ class ContextBase {
 
   resolveClassLikeType(name: string) : ObjectValueType | undefined {
     const v = this.resolveType(name);
-    return isClassLikeValue(v.kind) ? 
-	    {kind: ValueTypeKind.kObject, clazz: v as ClassLikeNode}
+    return isClassLikeValue(v.kind) ?
+        {kind: ValueTypeKind.kObject, clazz: v as ClassLikeNode}
             : undefined;
   }
 
@@ -1281,7 +1289,7 @@ class ContextBase {
     for (let i = this.stacks.length - 1; i > 0; i --) {
       const n = this.stacks[i];
       if (n.kind == SemanticsType.kBlock
-	 || n.kind == SemanticsType.kBranchBlock)
+     || n.kind == SemanticsType.kBranchBlock)
         continue;
 
       if (n.kind == SemanticsType.kModuleInitializer)
@@ -1301,9 +1309,9 @@ class ContextBase {
     if (parent.kind == SemanticsType.kModule) {
       const vnode = new VarValue(v.type, StorageScope.kModule, v.index);
       if (v.kind == SemanticsType.kVar) {
-	if (!this.isInModuleIntializer()) {
+    if (!this.isInModuleIntializer()) {
           (v as VarNode).usedByClosure = true;
-	}
+    }
         this.pushModuleVarUpdator(v as VarNode, vnode);
       }
       return vnode;
@@ -1315,28 +1323,28 @@ class ContextBase {
     // make closure
     let v_closure : ClosureDataNode | undefined = undefined;
     if (parent.kind == SemanticsType.kBlock
-	|| parent.kind == SemanticsType.kFunction
+    || parent.kind == SemanticsType.kFunction
         || parent.kind == SemanticsType.kConstructor
-	|| parent.kind == SemanticsType.kModuleInitializer
+    || parent.kind == SemanticsType.kModuleInitializer
         || parent.kind == SemanticsType.kMethod) {
       for(let i = this.stacks.length - 1; i > index; i --) {
         const n = this.stacks[i]
-	if(n.kind == SemanticsType.kFunction
+    if(n.kind == SemanticsType.kFunction
            || parent.kind == SemanticsType.kConstructor
-	   || parent.kind == SemanticsType.kModuleInitializer
-	   || n.kind == SemanticsType.kMethod) {
+       || parent.kind == SemanticsType.kModuleInitializer
+       || n.kind == SemanticsType.kMethod) {
           // load as closure
-	  if (!v_closure) {
-  	    v.usedByClosure = true;
-	    v_closure = new ClosureDataNode(v, n.astNode);
-	    n.add(v_closure);
-	  } else {
-	    v_closure = new ClosureDataNode(v_closure, n.astNode);
-	    n.add(v_closure);
-	  }
-	}
+      if (!v_closure) {
+          v.usedByClosure = true;
+        v_closure = new ClosureDataNode(v, n.astNode);
+        n.add(v_closure);
+      } else {
+        v_closure = new ClosureDataNode(v_closure, n.astNode);
+        n.add(v_closure);
       }
-    } 
+    }
+      }
+    }
 
     if (v_closure) {
       return new VarValue(v_closure.type, StorageScope.kClosure, v_closure.index);
@@ -1368,17 +1376,17 @@ class ContextBase {
       default:
         return <ArrayValueType>{kind: ValueTypeKind.kArray, element: this.getValueTypeFrom(type) };
     }
-  
+
     for (const a of PrimitiveArrayValueType) {
       if (a.element.kind == v)
         return a;
     }
     return PrimitiveValueType.Undefined;
   }
-  
+
   getValueTypeFrom(type?: ts.TypeNode) : ValueType | undefined {
     if (!type) return VoidOrAnyValueType;
-  
+
     debug(`getValueTypeFrom type: ${nodeToString(type)}`)
     switch(type.kind) {
       case ts.SyntaxKind.VoidKeyword:
@@ -1400,9 +1408,9 @@ class ContextBase {
       case ts.SyntaxKind.ArrayType:
         return this.getArrayValueType((type as ts.ArrayTypeNode).elementType);
       case ts.SyntaxKind.TypeReference:
-	return this.getValueTypeFromTypeReference(type as ts.TypeReferenceNode);
+    return this.getValueTypeFromTypeReference(type as ts.TypeReferenceNode);
     }
-    
+
     return PrimitiveValueType.Undefined;
   }
 
@@ -1429,7 +1437,7 @@ class ContextBase {
 }
 
 class BuildSemanticsContext extends ContextBase {
-  
+
   constructor(stacks: SemanticsNode[]) {
     super(stacks);
   }
@@ -1437,7 +1445,7 @@ class BuildSemanticsContext extends ContextBase {
 
   build(sourceFile: ts.SourceFile, is_std: boolean) {
     const module : ModuleLikeNode =
-	    is_std ? new StdModuleNode(sourceFile)
+        is_std ? new StdModuleNode(sourceFile)
               : new ModuleNode(normalize_name(sourceFile.fileName), sourceFile);
     this.module = module;
     this.push(module);
@@ -1448,16 +1456,16 @@ class BuildSemanticsContext extends ContextBase {
         this.buildClassDeclaration(node as ts.ClassDeclaration);
         break;
       case ts.SyntaxKind.MethodDeclaration:
-	this.buildMethodDeclaration(node as ts.MethodDeclaration);
+    this.buildMethodDeclaration(node as ts.MethodDeclaration);
         break;
       case ts.SyntaxKind.FunctionDeclaration:
         this.buildFunctionDeclaration(node as ts.FunctionDeclaration);
         break;
       case ts.SyntaxKind.VariableStatement:
-	this.buildVariableStatement(node as ts.VariableStatement);
-	break;
+    this.buildVariableStatement(node as ts.VariableStatement);
+    break;
       case ts.SyntaxKind.EnumDeclaration:
-	this.buildEnumDeclaration(node as ts.EnumDeclaration);
+    this.buildEnumDeclaration(node as ts.EnumDeclaration);
         break;
       }
     })
@@ -1473,7 +1481,7 @@ class BuildSemanticsContext extends ContextBase {
   }
 
   buildClassDeclaration(classDec: ts.ClassDeclaration) {
-    const clazz = new ClassNode(classDec.name.text, classDec); 
+    const clazz = new ClassNode(classDec.name.text, classDec);
     this.addToModule(clazz);
 
     this.tasks.push(() => {
@@ -1488,10 +1496,10 @@ class BuildSemanticsContext extends ContextBase {
   buildEnumMemberValue(expr: ts.Expression) : string | number | undefined {
     switch(expr.kind) {
       case ts.SyntaxKind.NumericLiteral:
-	return parseInt((expr as ts.NumericLiteral).text);
+    return parseInt((expr as ts.NumericLiteral).text);
         break;
       case ts.SyntaxKind.StringLiteral:
-        return (expr as ts.StringLiteral).text;	
+        return (expr as ts.StringLiteral).text;
     }
     return undefined;
   }
@@ -1504,11 +1512,11 @@ class BuildSemanticsContext extends ContextBase {
       let value : number | string | undefined = start;
       if (m.initializer) {
         value = this.buildEnumMemberValue(m.initializer);
-	if (!value) {
+    if (!value) {
           value = start ++;
-	} else if (typeof value == 'number') {
+    } else if (typeof value == 'number') {
           start = (value as number) + 1;
-	}
+    }
       } else {
         value = start ++;
       }
@@ -1524,8 +1532,8 @@ class BuildSemanticsContext extends ContextBase {
         this.buildMethodDeclaration(m as ts.MethodDeclaration);
         break;
       case ts.SyntaxKind.PropertyDeclaration:
-	this.buildPropertyDeclaration(m as ts.PropertyDeclaration);
-        break;	
+    this.buildPropertyDeclaration(m as ts.PropertyDeclaration);
+        break;
       case ts.SyntaxKind.Constructor:
         this.buildConstructor(m as ts.ConstructorDeclaration);
         break;
@@ -1576,13 +1584,13 @@ class BuildSemanticsContext extends ContextBase {
   }
 
   buildPropertyDeclaration(p: ts.PropertyDeclaration) {
-    let value: ValueType = PrimitiveValueType.Any;
+    let valueType: ValueType = PrimitiveValueType.Any;
 
     if (p.type) {
-      value = this.getValueTypeFrom(p.type);
+      valueType = this.getValueTypeFrom(p.type);
     }
 
-    const field = new FieldNode((p.name as ts.Identifier).text, value, p);
+    const field = new FieldNode((p.name as ts.Identifier).text, valueType, p);
     this.addTo(field, [SemanticsType.kClass, SemanticsType.kInterface]);
   }
 }
@@ -1620,7 +1628,7 @@ class CompilerContext extends ContextBase {
 
   createParameterCountValue(count: number) : ParameterValue {
     return this.createParameterValue(PrimitiveValueType.Int,
-				     new LiterialValue(PrimitiveValueType.Int, count));
+                     new LiterialValue(PrimitiveValueType.Int, count));
   }
 
   createParameterValue(type: ValueType, value: Value) : ParameterValue {
@@ -1678,7 +1686,7 @@ class CompilerContext extends ContextBase {
   }
 
   compileModuleInitialize() {
-    this.compileFunction(this.module.initialize); 
+    this.compileFunction(this.module.initialize);
   }
 
   compileClassPropertiesInitialize(clazz: ClassNode) {
@@ -1695,26 +1703,26 @@ class CompilerContext extends ContextBase {
           value_type = f.type;
         }
 
-	if (!thiz_value) {
+    if (!thiz_value) {
           thiz_value = new ThisValue(<ObjectValueType> {
-		  kind: ValueTypeKind.kObject,
-		  clazz: clazz});
-	}
+          kind: ValueTypeKind.kObject,
+          clazz: clazz});
+    }
 
-	const left_value = new PropertyAccessValue(thiz_value, f);
+    const left_value = new PropertyAccessValue(thiz_value, f);
 
-	let right_value: Value;
-	if (this.isNeedReturnExpression(node.initializer.kind)) {
-	  right_value = this.compileFunctionCallLikeExpression(node.initializer, left_value);
-	} else {
+    let right_value: Value;
+    if (this.isNeedReturnExpression(node.initializer.kind)) {
+      right_value = this.compileFunctionCallLikeExpression(node.initializer, left_value);
+    } else {
           right_value = this.compileExpression(node.initializer);
           this.values.push(new BinaryOpValue(left_value,
-			      ts.SyntaxKind.EqualsToken,
-			      right_value));
-	}
-	if (!node.type) {
+                  ts.SyntaxKind.EqualsToken,
+                  right_value));
+    }
+    if (!node.type) {
           f.type = right_value.type;
-	}
+    }
       }
     }
 
@@ -1744,7 +1752,7 @@ class CompilerContext extends ContextBase {
           this.compileFunctionStatement(node.body);
         } else {
           const one_expr = node.body as ts.Expression;
-	  this.compileReturnExpression(one_expr);
+      this.compileReturnExpression(one_expr);
         }
       }
     }
@@ -1762,21 +1770,21 @@ class CompilerContext extends ContextBase {
     switch(n.kind) {
       case ts.SyntaxKind.Block: {
         const block = new BlockNode(n);
-	this.addTo(block, [
-		SemanticsType.kBlock,
-		SemanticsType.kBranchBlock,
-		SemanticsType.kFunction,
-		SemanticsType.kModuleInitializer,
-		SemanticsType.kConstructor,
-		SemanticsType.kMethod]);
-	ts.forEachChild(n,  (node) => this.compileFunctionStatement(node));
+    this.addTo(block, [
+        SemanticsType.kBlock,
+        SemanticsType.kBranchBlock,
+        SemanticsType.kFunction,
+        SemanticsType.kModuleInitializer,
+        SemanticsType.kConstructor,
+        SemanticsType.kMethod]);
+    ts.forEachChild(n,  (node) => this.compileFunctionStatement(node));
         break;
       }
       case ts.SyntaxKind.ExpressionStatement: {
-	  const expr = (n as ts.ExpressionStatement).expression;
-	  const value = this.compileExpression(expr);
-	  if (expr.kind == ts.SyntaxKind.BinaryExpression &&
-		  isEqualOperator((expr as ts.BinaryExpression).operatorToken.kind)) {
+      const expr = (n as ts.ExpressionStatement).expression;
+      const value = this.compileExpression(expr);
+      if (expr.kind == ts.SyntaxKind.BinaryExpression &&
+          isEqualOperator((expr as ts.BinaryExpression).operatorToken.kind)) {
             this.values.push(value);
           }
     if(value.kind == ValueKind.KUnaryOp){
@@ -1786,10 +1794,10 @@ class CompilerContext extends ContextBase {
         break;
 
       case ts.SyntaxKind.VariableStatement:
-	this.compileVariableStatement((n as ts.VariableStatement));
+    this.compileVariableStatement((n as ts.VariableStatement));
         break;
       case ts.SyntaxKind.ReturnStatement:
-	this.compileReturnStatement((n as ts.ReturnStatement));
+    this.compileReturnStatement((n as ts.ReturnStatement));
         break;
       case ts.SyntaxKind.IfStatement:
         this.compileIfStatement((n as ts.IfStatement));
@@ -1819,36 +1827,36 @@ class CompilerContext extends ContextBase {
 
       if (v.initializer) {
         value = new VarValue(value_type, StorageScope.kLocal, 0);
-	if (v.initializer.kind == ts.SyntaxKind.CallExpression) {
-	  let new_value = this.compileCallExpression(v.initializer as ts.CallExpression, value);
-	  if (!v.type){
-	    value_type = new_value.type;
-	    value.type = value_type; // reset the value type
-	  }
-	} else {
+    if (v.initializer.kind == ts.SyntaxKind.CallExpression) {
+      let new_value = this.compileCallExpression(v.initializer as ts.CallExpression, value);
+      if (!v.type){
+        value_type = new_value.type;
+        value.type = value_type; // reset the value type
+      }
+    } else {
           const right = this.compileExpression(v.initializer);
-	  console.log("=========++++ ", ValueTypeKind[right.type.kind]);
-	  if (!v.type) {
-	    value_type = right.type;
-	    value.type = value_type; // reset the value type
-	  }
+      console.log("=========++++ ", ValueTypeKind[right.type.kind]);
+      if (!v.type) {
+        value_type = right.type;
+        value.type = value_type; // reset the value type
+      }
           this.values.push(new BinaryOpValue(value, ts.SyntaxKind.EqualsToken, right));
-	}
+    }
       }
 
       if (this.isInModuleIntializer()) {
          const top = this.getNode([SemanticsType.kModule, SemanticsType.kStdModule]);
          const vnode = top.find((v.name as ts.Identifier).text);
-	 console.log(`==== try find vnode: from top ${SemanticsType[top.kind]} with node: ${vnode}`);
-	 if (vnode && vnode.kind == SemanticsType.kVar) {
-	   if (!v.type)
+     console.log(`==== try find vnode: from top ${SemanticsType[top.kind]} with node: ${vnode}`);
+     if (vnode && vnode.kind == SemanticsType.kVar) {
+       if (!v.type)
              (vnode as VarNode).type = value_type;
-	   console.log("==== vnode type:", ValueTypeKind[(vnode as VarNode).type.kind]);
-	   value.storage = (top.kind == SemanticsType.kModule ?
-			       StorageScope.kModule : StorageScope.kGlobal);
-	   value.index = vnode.index;
-	   this.pushModuleVarUpdator(vnode as VarNode, value);
-	 }
+       console.log("==== vnode type:", ValueTypeKind[(vnode as VarNode).type.kind]);
+       value.storage = (top.kind == SemanticsType.kModule ?
+                   StorageScope.kModule : StorageScope.kGlobal);
+       value.index = vnode.index;
+       this.pushModuleVarUpdator(vnode as VarNode, value);
+     }
       } else {
         const vnode = new VarNode((v.name as ts.Identifier).text, value_type, v);
         this.addTo(vnode, [SemanticsType.kBlock]);
@@ -1860,6 +1868,7 @@ class CompilerContext extends ContextBase {
   compileReturnStatement(retNode: ts.ReturnStatement) {
     this.compileReturnExpression(retNode.expression);
   }
+
   compileIfStatement(ifSt: ts.IfStatement){
     const expr = this.compileExpression(ifSt.expression);
     const if_value = new IfValue(expr);
@@ -1867,11 +1876,13 @@ class CompilerContext extends ContextBase {
     this.compileThenStatement(ifSt.thenStatement);
     this.compileElseStatement(ifSt.elseStatement);
   }
+
   compileThenStatement(thenSt: ts.Statement) {
     this.compileFunctionStatement(thenSt);
     const then_value = new ThenValue();
     this.values.push(then_value);
   }
+
   compileElseStatement(elseSt: ts.Statement){
     if(!elseSt) return;
     const else_start = new ElseValue(true);
@@ -1880,6 +1891,7 @@ class CompilerContext extends ContextBase {
     const else_end = new ElseValue(false);
     this.values.push(else_end);
   }
+
   compileWhileStatement(whileSt: ts.WhileStatement){
     const expr = this.compileExpression(whileSt.expression);
     const while_start = new WhileValue(true, expr);
@@ -1888,6 +1900,7 @@ class CompilerContext extends ContextBase {
     const while_end = new WhileValue(false);
     this.values.push(while_end);
   }
+
   compileDoWhileStatement(doSt: ts.DoStatement){
     const expr = this.compileExpression(doSt.expression);
     const do_start = new DoWhileValue(true);
@@ -1896,6 +1909,7 @@ class CompilerContext extends ContextBase {
     const do_end = new DoWhileValue(false, expr);
     this.values.push(do_end);
   }
+
   compileSwitchStatement(swicthSt: ts.SwitchStatement){
     const expr = this.compileExpression(swicthSt.expression);
     const switch_start = new SwitchValue(true, expr);
@@ -1904,10 +1918,12 @@ class CompilerContext extends ContextBase {
     const switch_end = new SwitchValue(false);
     this.values.push(switch_end);
   }
+
   compileBreakStatement(brSt: ts.BreakStatement){ //
     const break_value = new BreakValue();
     this.values.push(break_value);
   }
+
   compileCaseBlock(n: ts.CaseBlock){
     for(let e of n.clauses){
       if(e.kind == ts.SyntaxKind.CaseClause){
@@ -1918,6 +1934,7 @@ class CompilerContext extends ContextBase {
       }
     }
   }
+
   compileCaseClause(n: ts.CaseClause){
     const expr = this.compileExpression(n.expression);
     const case_value = new CaseValue(false, expr);
@@ -1926,6 +1943,7 @@ class CompilerContext extends ContextBase {
       this.compileFunctionStatement(st);
     }
   }
+
   compileDefaultClause(n: ts.DefaultClause){
     const default_value = new CaseValue(true);
     this.values.push(default_value);
@@ -1933,6 +1951,7 @@ class CompilerContext extends ContextBase {
       this.compileFunctionStatement(st);
     }
   }
+
   compileReturnExpression(expr: ts.Expression) {
     if (expr) {
       const kind = expr.kind;
@@ -1941,8 +1960,8 @@ class CompilerContext extends ContextBase {
         this.compileCallExpression((expr as ts.CallExpression), retValue);
       } else {
         this.values.push(new BinaryOpValue(retValue,
-  				     ts.SyntaxKind.EqualsToken,
-				     this.compileExpression(expr)));
+                       ts.SyntaxKind.EqualsToken,
+                     this.compileExpression(expr)));
       }
     }
     this.values.push(new ReturnValue());
@@ -1953,33 +1972,39 @@ class CompilerContext extends ContextBase {
       case ts.SyntaxKind.BinaryExpression:
         return this.compileBinaryExpression(expr as ts.BinaryExpression);
       case ts.SyntaxKind.CallExpression:
-	return this.compileCallExpression(expr as ts.CallExpression, undefined);
+        return this.compileCallExpression(expr as ts.CallExpression, undefined);
       case ts.SyntaxKind.PropertyAccessExpression:
-	return this.compilePropertyAccessExpression(expr as ts.PropertyAccessExpression);
+        return this.compilePropertyAccessExpression(expr as ts.PropertyAccessExpression);
       case ts.SyntaxKind.Identifier:
-	return this.compileIdentifier(expr as ts.Identifier);
+        return this.compileIdentifier(expr as ts.Identifier);
       case ts.SyntaxKind.StringLiteral:
-	return new LiterialValue(PrimitiveValueType.String, (expr as ts.StringLiteral).text);
+        return new LiterialValue(PrimitiveValueType.String, (expr as ts.StringLiteral).text);
       case ts.SyntaxKind.NumericLiteral:
-	return new LiterialValue(PrimitiveValueType.Number, (expr as ts.NumericLiteral).text);
+        return new LiterialValue(PrimitiveValueType.Number, (expr as ts.NumericLiteral).text);
       case ts.SyntaxKind.ThisKeyword:
-	return this.resolveThis();
+        return this.resolveThis();
+      case ts.SyntaxKind.TrueKeyword:
+        return new LiterialValue(PrimitiveValueType.Boolean, true);
+      case ts.SyntaxKind.FalseKeyword:
+        return new LiterialValue(PrimitiveValueType.Boolean, false);
       case ts.SyntaxKind.NewExpression:
-	return this.compileNewExpression(expr as ts.NewExpression);
+        return this.compileNewExpression(expr as ts.NewExpression);
       case ts.SyntaxKind.ElementAccessExpression:
-	return this.compileElementAccessExpression(expr as ts.ElementAccessExpression);
-    case ts.SyntaxKind.PrefixUnaryExpression:
-  return this.compilePrefixUnaryExpression(expr as ts.PrefixUnaryExpression);
-    case ts.SyntaxKind.PostfixUnaryExpression:
-  return this.compilePostfixUnaryExpression(expr as ts.PostfixUnaryExpression);
+        return this.compileElementAccessExpression(expr as ts.ElementAccessExpression);
+      case ts.SyntaxKind.PrefixUnaryExpression:
+        return this.compilePrefixUnaryExpression(expr as ts.PrefixUnaryExpression);
+      case ts.SyntaxKind.PostfixUnaryExpression:
+        return this.compilePostfixUnaryExpression(expr as ts.PostfixUnaryExpression);
+      case ts.SyntaxKind.ObjectLiteralExpression:
+        return this.compileObjectLiteralExpression(expr as ts.ObjectLiteralExpression);
       default:
-	console.error(`unknown the expresstion: ${nodeToString(expr)}`);
+        console.error(`unknown the expresstion: ${nodeToString(expr)}`);
     }
     return new NoneValue();
   }
 
   compilePropertyAccessExpression(expr: ts.PropertyAccessExpression) : Value {
-    const thiz_value = this.compileExpression(expr.expression); 
+    const thiz_value = this.compileExpression(expr.expression);
     const name = (expr.name as ts.Identifier).text;
     if (thiz_value.kind == ValueKind.kEnum) {
       const enum_value = thiz_value as EnumValue;
@@ -1989,24 +2014,50 @@ class CompilerContext extends ContextBase {
       const m = (thiz_value.type as ObjectValueType).clazz.find(name);
 
       if (!m) {
-	 // TODO
-	 console.error(`cannot resolve the ${name}`);
-	 return new NoneValue();
+     // TODO
+     console.error(`cannot resolve the ${name}`);
+     return new NoneValue();
       }
 
       if (m.kind == SemanticsType.kMethod)
         return new PropertyAccessValue(thiz_value, m as MethodNode);
       else if (m.kind == SemanticsType.kField)
-	return new PropertyAccessValue(thiz_value, m as FieldNode);
+    return new PropertyAccessValue(thiz_value, m as FieldNode);
     } else {
       console.error(`compilePropertyAccessExpression this value type: ${ValueTypeKind[thiz_value.type.kind]}`);
     }
     return new NoneValue();
   }
 
+  compileObjectLiteralExpression(expr: ts.ObjectLiteralExpression) : Value {
+     const module = this.getNode([SemanticsType.kModule, SemanticsType.kStdModule]) as ModuleLikeNode;
+     const clazz = new ClassNode(module.getTemporaryClassName(), expr, true);
+     module.add(clazz);
+     const clazzType : ObjectValueType = {kind: ValueTypeKind.kObject, clazz: clazz};
+     const v = this.createTemporaryValue(clazzType);
+     // new object value
+     this.values.push(new BinaryOpValue(v, ts.SyntaxKind.EqualsToken,
+                      NewValue.FromClazzType(clazzType, -1)));
+     for (const p of expr.properties) {
+       if (p.kind == ts.SyntaxKind.PropertyAssignment) {
+     const value = this.compileExpression(p.initializer);
+         const f = new FieldNode((p.name as ts.Identifier).text, value.type, p);
+     f.value = value;
+     clazz.add(f);
+
+     this.values.push(new BinaryOpValue(
+            new PropertyAccessValue(v, f),
+            ts.SyntaxKind.EqualsToken, value));
+       }
+     }
+     clazz.updateFieldOffsets();
+
+     return v;
+  }
+
   compileElementAccessExpression(expr: ts.ElementAccessExpression) : Value {
     const element = this.compileExpression(expr.expression);
-    const arg = this.compileExpression(expr.argumentExpression); 
+    const arg = this.compileExpression(expr.argumentExpression);
 
     return new ElementAccessValue(element, arg);
   }
@@ -2050,7 +2101,7 @@ class CompilerContext extends ContextBase {
       case ts.SyntaxKind.CallExpression:
         return this.compileCallExpression(expr as ts.CallExpression, ret);
       case ts.SyntaxKind.NewExpression:
-	return this.compileNewExpression(expr as ts.NewExpression);
+    return this.compileNewExpression(expr as ts.NewExpression);
     }
     return new NoneValue();
   }
@@ -2058,12 +2109,12 @@ class CompilerContext extends ContextBase {
   compileBinaryExpression(expr: ts.BinaryExpression) : Value {
     if (isEqualOperator(expr.operatorToken.kind)) {
       if (this.isNeedReturnExpression(expr.right.kind)) {
-	const left_value = this.compileExpression(expr.left);
+    const left_value = this.compileExpression(expr.left);
         const right_value = this.compileFunctionCallLikeExpression(expr.right, left_value);
-	if (left_value.equal(right_value))
-	  return left_value;
+    if (left_value.equal(right_value))
+      return left_value;
 
-	return new BinaryOpValue(left_value, expr.operatorToken.kind, right_value);
+    return new BinaryOpValue(left_value, expr.operatorToken.kind, right_value);
       }
     }
 
@@ -2091,12 +2142,12 @@ class CompilerContext extends ContextBase {
       const type = func.getParamterType(i);
       if (arg_value.kind == ValueKind.kVar && ((arg_value as VarValue).storage == StorageScope.kTemporary)) {
         // in temporary
-	if (type.kind == arg_value.type.kind) {
-	  continue; // same type, use the return result directly
-	} else {
-	  // reuse the temporary
-	  this.cur_temporary --;
-	}
+        if (type.kind == arg_value.type.kind) {
+          continue; // same type, use the return result directly
+        } else {
+         // reuse the temporary
+         this.cur_temporary --;
+        }
       }
       const arg_target = this.createParameterValue(type, arg_value);
       i++;
@@ -2123,7 +2174,7 @@ class CompilerContext extends ContextBase {
     let i = 0;
     let func : FunctionLikeNode | undefined;
     if (funcValue.kind == ValueKind.kFunction) {
-      func = (funcValue as FunctionValue).func; 
+      func = (funcValue as FunctionValue).func;
     } else if (funcValue.kind == ValueKind.kPropertyAccess) {
       func = (funcValue as PropertyAccessValue).member as FunctionLikeNode;
     } else {
