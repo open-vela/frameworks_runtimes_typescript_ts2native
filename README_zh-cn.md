@@ -1,10 +1,10 @@
-# Introduction
+# 介绍
 
-[English|[简体中文](./README_zh-cn.md)]
+[简体中文|[English](./README.md)]
 
-A framework in Vela for converting TypeScript to native code.
+Vela 中用于将TypeScript转化为native代码的框架。
 
-# Project Structure
+# 项目结构
 
 ```tree
 ├── lib
@@ -49,18 +49,18 @@ A framework in Vela for converting TypeScript to native code.
 └── tsconfig.json
 ```
 
-* `src`: Core project code
-* `test`: Common test programs used to test the performance and memory changes after converting TypeScript to native code
+* `src`: 项目核心代码
+* `test`: 一些常用的测试程序，用于测试TypeScript转为native后性能和内存的变化
 
-# Usage
+# 使用
 
-## Project Compilation
+## 项目编译
 
 ```
 npm run build
 ```
 
-## Converting Hello to Native Code
+## 将Hello转换为native的方式
 
 ```
 gcc -fPIC -shared -I<runtime-path> -o libhello.so out/hello.c
