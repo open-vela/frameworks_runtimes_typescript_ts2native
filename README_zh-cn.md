@@ -2,9 +2,9 @@
 
 [简体中文|[English](./README.md)]
 
-Vela 中用于将TypeScript转化为native代码的框架。
+openvela 中用于将 TypeScript 转化为 native 代码的框架。
 
-# 项目结构
+## 项目结构
 
 ```tree
 ├── lib
@@ -49,18 +49,18 @@ Vela 中用于将TypeScript转化为native代码的框架。
 └── tsconfig.json
 ```
 
-* `src`: 项目核心代码
-* `test`: 一些常用的测试程序，用于测试TypeScript转为native后性能和内存的变化
+* `src`: 项目核心代码。
+* `test`: 一些常用的测试程序，用于测试 TypeScript 转为 native 后性能和内存的变化。
 
-# 使用
+## 使用
 
-## 项目编译
+### 项目编译
 
 ```
 npm run build
 ```
 
-## 将Hello转换为native的方式
+### 将Hello转换为native的方式
 
 ```
 gcc -fPIC -shared -I<runtime-path> -o libhello.so out/hello.c
